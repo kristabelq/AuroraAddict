@@ -4,8 +4,8 @@ import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Aurora Addict - Plan Your Aurora Hunt",
-  description: "Join aurora chasers worldwide to track, plan, and share northern lights sightings",
+  title: "Aurora Intel - Your Intelligent Aurora Hunting Companion",
+  description: "Professional aurora hunting platform connecting tour operators, accommodations, and aurora chasers with real-time intelligence and business insights",
 };
 
 export default function RootLayout({
