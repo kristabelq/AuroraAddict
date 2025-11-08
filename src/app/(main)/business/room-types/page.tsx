@@ -40,12 +40,15 @@ export default function RoomTypesPage() {
     priceFrom: "",
     currency: "EUR",
     amenities: [] as string[],
+    images: [] as string[],
+    coverImage: null as string | null,
     bookingComUrl: "",
     agodaUrl: "",
     directBookingUrl: "",
   });
 
   const [amenityInput, setAmenityInput] = useState("");
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -106,6 +109,8 @@ export default function RoomTypesPage() {
         body: JSON.stringify({
           ...formData,
           priceFrom: formData.priceFrom ? parseFloat(formData.priceFrom) : null,
+          images: formData.images,
+          coverImage: formData.coverImage || (formData.images.length > 0 ? formData.images[0] : null),
         }),
       });
 
@@ -135,6 +140,8 @@ export default function RoomTypesPage() {
       priceFrom: room.priceFrom?.toString() || "",
       currency: room.currency,
       amenities: room.amenities || [],
+      images: room.images || [],
+      coverImage: room.coverImage,
       bookingComUrl: room.bookingComUrl || "",
       agodaUrl: room.agodaUrl || "",
       directBookingUrl: room.directBookingUrl || "",
@@ -174,11 +181,75 @@ export default function RoomTypesPage() {
       priceFrom: "",
       currency: "EUR",
       amenities: [],
+      images: [],
+      coverImage: null,
       bookingComUrl: "",
       agodaUrl: "",
       directBookingUrl: "",
     });
     setAmenityInput("");
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Check number of images (max 10 total)
+    if (formData.images.length + files.length > 10) {
+      toast.error("Maximum 10 images allowed");
+      return;
+    }
+
+    setUploadingImages(true);
+
+    try {
+      const uploadFormData = new FormData();
+      Array.from(files).forEach((file) => {
+        uploadFormData.append("images", file);
+      });
+
+      const response = await fetch("/api/business/room-types/upload", {
+        method: "POST",
+        body: uploadFormData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to upload images");
+      }
+
+      setFormData({
+        ...formData,
+        images: [...formData.images, ...data.imageUrls],
+        coverImage: formData.coverImage || data.imageUrls[0],
+      });
+
+      toast.success(`${data.imageUrls.length} image(s) uploaded!`);
+    } catch (error: any) {
+      console.error("Error uploading images:", error);
+      toast.error(error.message);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const removeImage = (imageUrl: string) => {
+    const newImages = formData.images.filter((img) => img !== imageUrl);
+    setFormData({
+      ...formData,
+      images: newImages,
+      coverImage: formData.coverImage === imageUrl
+        ? (newImages.length > 0 ? newImages[0] : null)
+        : formData.coverImage,
+    });
+  };
+
+  const setCoverImage = (imageUrl: string) => {
+    setFormData({
+      ...formData,
+      coverImage: imageUrl,
+    });
   };
 
   const addAmenity = () => {
@@ -471,6 +542,98 @@ export default function RoomTypesPage() {
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* Image Upload */}
+                <div className="space-y-4 border-t border-white/10 pt-6">
+                  <h3 className="text-lg font-semibold text-white">Room Images</h3>
+                  <p className="text-sm text-gray-400">
+                    Upload up to 10 images. The first image will be used as the cover.
+                  </p>
+
+                  {/* Image Grid */}
+                  {formData.images.length > 0 && (
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      {formData.images.map((imageUrl, index) => (
+                        <div
+                          key={index}
+                          className={`relative aspect-video rounded-lg overflow-hidden group ${
+                            formData.coverImage === imageUrl ? "ring-2 ring-aurora-green" : ""
+                          }`}
+                        >
+                          <Image
+                            src={imageUrl}
+                            alt={`Room image ${index + 1}`}
+                            fill
+                            className="object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            {formData.coverImage !== imageUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setCoverImage(imageUrl)}
+                                className="bg-aurora-green/80 hover:bg-aurora-green text-white px-3 py-1 rounded text-xs font-medium"
+                              >
+                                Set as Cover
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeImage(imageUrl)}
+                              className="bg-red-500/80 hover:bg-red-500 text-white px-3 py-1 rounded text-xs font-medium"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          {formData.coverImage === imageUrl && (
+                            <div className="absolute top-2 left-2 bg-aurora-green text-black px-2 py-1 rounded text-xs font-bold">
+                              COVER
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Upload Button */}
+                  {formData.images.length < 10 && (
+                    <div>
+                      <input
+                        type="file"
+                        id="room-images"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        disabled={uploadingImages}
+                      />
+                      <label
+                        htmlFor="room-images"
+                        className={`w-full bg-white/10 hover:bg-white/20 border-2 border-dashed border-gray-600 hover:border-aurora-green rounded-lg px-4 py-8 text-white transition-colors flex flex-col items-center gap-2 cursor-pointer ${
+                          uploadingImages ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
+                      >
+                        {uploadingImages ? (
+                          <>
+                            <div className="w-8 h-8 border-4 border-t-aurora-green border-r-aurora-blue border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+                            <span className="text-sm">Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            <span className="text-sm">
+                              Click to upload room images ({formData.images.length}/10)
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              JPG, PNG up to 10MB each
+                            </span>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 {/* Amenities */}
