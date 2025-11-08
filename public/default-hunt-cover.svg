@@ -1,0 +1,151 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <!-- Dark night sky gradient -->
+    <linearGradient id="skyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0e27;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1a1f3e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f1829;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Aurora wave gradients -->
+    <linearGradient id="auroraGreen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00ff87;stop-opacity:0" />
+      <stop offset="30%" style="stop-color:#00ff87;stop-opacity:0.6" />
+      <stop offset="70%" style="stop-color:#00ff87;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#00ff87;stop-opacity:0" />
+    </linearGradient>
+
+    <linearGradient id="auroraBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:0" />
+      <stop offset="30%" style="stop-color:#00d9ff;stop-opacity:0.5" />
+      <stop offset="70%" style="stop-color:#00d9ff;stop-opacity:0.5" />
+      <stop offset="100%" style="stop-color:#00d9ff;stop-opacity:0" />
+    </linearGradient>
+
+    <linearGradient id="auroraPurple" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#b77aff;stop-opacity:0" />
+      <stop offset="30%" style="stop-color:#b77aff;stop-opacity:0.4" />
+      <stop offset="70%" style="stop-color:#b77aff;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:#b77aff;stop-opacity:0" />
+    </linearGradient>
+
+    <!-- Glow filter -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="15" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Sky background -->
+  <rect width="1600" height="900" fill="url(#skyGradient)"/>
+
+  <!-- Stars -->
+  <circle cx="150" cy="80" r="2" fill="#ffffff" opacity="0.8"/>
+  <circle cx="280" cy="120" r="1.5" fill="#ffffff" opacity="0.6"/>
+  <circle cx="450" cy="90" r="2.5" fill="#ffffff" opacity="0.9"/>
+  <circle cx="620" cy="140" r="1.8" fill="#ffffff" opacity="0.7"/>
+  <circle cx="780" cy="70" r="2.2" fill="#ffffff" opacity="0.85"/>
+  <circle cx="950" cy="110" r="1.5" fill="#ffffff" opacity="0.65"/>
+  <circle cx="1100" cy="95" r="2" fill="#ffffff" opacity="0.75"/>
+  <circle cx="1250" cy="125" r="1.8" fill="#ffffff" opacity="0.8"/>
+  <circle cx="1400" cy="85" r="2.3" fill="#ffffff" opacity="0.9"/>
+  <circle cx="200" cy="200" r="1.5" fill="#ffffff" opacity="0.6"/>
+  <circle cx="500" cy="180" r="1.8" fill="#ffffff" opacity="0.7"/>
+  <circle cx="800" cy="210" r="1.5" fill="#ffffff" opacity="0.65"/>
+  <circle cx="1150" cy="190" r="2" fill="#ffffff" opacity="0.75"/>
+  <circle cx="1450" cy="220" r="1.7" fill="#ffffff" opacity="0.7"/>
+
+  <!-- Mountains silhouette -->
+  <path d="M0,700 L200,550 L400,620 L600,500 L800,580 L1000,480 L1200,560 L1400,520 L1600,600 L1600,900 L0,900 Z"
+        fill="#0a0e1a" opacity="0.9"/>
+
+  <!-- Aurora waves -->
+  <!-- Green wave -->
+  <path d="M0,350 Q200,250 400,300 T800,280 Q1000,260 1200,300 T1600,320"
+        stroke="url(#auroraGreen)"
+        stroke-width="60"
+        fill="none"
+        opacity="0.7"
+        filter="url(#glow)"/>
+
+  <!-- Blue wave -->
+  <path d="M0,400 Q200,320 400,380 T800,350 Q1000,330 1200,370 T1600,390"
+        stroke="url(#auroraBlue)"
+        stroke-width="50"
+        fill="none"
+        opacity="0.6"
+        filter="url(#glow)"/>
+
+  <!-- Purple wave -->
+  <path d="M0,460 Q200,400 400,440 T800,420 Q1000,400 1200,440 T1600,460"
+        stroke="url(#auroraPurple)"
+        stroke-width="40"
+        fill="none"
+        opacity="0.5"
+        filter="url(#glow)"/>
+
+  <!-- Reflection glow on mountains -->
+  <ellipse cx="400" cy="650" rx="300" ry="50" fill="#00ff87" opacity="0.05"/>
+  <ellipse cx="800" cy="680" rx="350" ry="60" fill="#00d9ff" opacity="0.04"/>
+  <ellipse cx="1200" cy="660" rx="280" ry="45" fill="#b77aff" opacity="0.03"/>
+
+  <!-- Aurora Addict branding -->
+  <g filter="url(#softGlow)">
+    <!-- Logo circle with aurora glow -->
+    <circle cx="800" cy="450" r="80" fill="#1a1f3e" opacity="0.6"/>
+    <circle cx="800" cy="450" r="75" fill="none" stroke="url(#auroraGreen)" stroke-width="3" opacity="0.8"/>
+
+    <!-- Stylized "A" icon -->
+    <path d="M800,410 L760,490 L770,490 L775,475 L825,475 L830,490 L840,490 L800,410 Z M780,465 L800,425 L820,465 Z"
+          fill="url(#auroraGreen)" opacity="0.9"/>
+
+    <!-- Aurora Addict text -->
+    <text x="800" y="580"
+          font-family="Arial, sans-serif"
+          font-size="56"
+          font-weight="700"
+          fill="#ffffff"
+          text-anchor="middle"
+          letter-spacing="2">
+      AURORA ADDICT
+    </text>
+
+    <!-- Tagline -->
+    <text x="800" y="620"
+          font-family="Arial, sans-serif"
+          font-size="24"
+          font-weight="300"
+          fill="#00ff87"
+          text-anchor="middle"
+          letter-spacing="4"
+          opacity="0.8">
+      CHASE THE LIGHTS
+    </text>
+  </g>
+
+  <!-- Decorative light particles -->
+  <circle cx="650" cy="420" r="3" fill="#00ff87" opacity="0.6">
+    <animate attributeName="opacity" values="0.3;0.8;0.3" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="950" cy="480" r="2.5" fill="#00d9ff" opacity="0.5">
+    <animate attributeName="opacity" values="0.2;0.7;0.2" dur="2.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="720" cy="520" r="2" fill="#b77aff" opacity="0.4">
+    <animate attributeName="opacity" values="0.2;0.6;0.2" dur="2.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="880" cy="390" r="2.5" fill="#00ff87" opacity="0.5">
+    <animate attributeName="opacity" values="0.3;0.7;0.3" dur="3.2s" repeatCount="indefinite"/>
+  </circle>
+</svg>

@@ -1,0 +1,660 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                String    @id @default(cuid())
+  name              String?
+  username          String?   @unique // Unique handle like @kristabelq
+  email             String?   @unique
+  emailVerified     DateTime?
+  image             String?
+  bio               String?
+  onboardingComplete Boolean  @default(false)
+
+  // Social/Contact fields
+  instagram         String?   // Instagram handle (without @)
+  whatsappNumber    String?   // WhatsApp number with country code (no spaces, dashes, or plus signs)
+  publicEmail       String?   // Public email for contact
+
+  // Stripe Connect fields for receiving payments
+  stripeAccountId   String?   @unique // Stripe Connect account ID
+  stripeOnboarded   Boolean   @default(false) // Whether Stripe onboarding is complete
+  stripeOnboardedAt DateTime? // When Stripe onboarding was completed
+
+  // User Type System (for chat)
+  userType          String    @default("personal") // 'personal' | 'business'
+
+  // Business Verification
+  businessName            String?
+  businessCategory        String?   // LEGACY: 'accommodation' | 'tour_operator' | 'photography' | 'restaurant' | 'shop' | 'other'
+  businessServices        String[]  @default([]) // NEW: ['accommodation', 'restaurant', 'shop', 'tours', 'photography']
+  businessDescription     String?   @db.Text // Business description
+  businessWebsite         String?
+  businessPhone           String?
+  businessEmail           String?   // Business contact email
+  businessAddress         String?
+  businessCity            String?
+  businessCountry         String?   @default("Finland")
+  latitude                Float?    // Business location latitude
+  longitude               Float?    // Business location longitude
+  businessLicenseUrl      String?   // Business license document URL
+  idDocumentUrl           String?   // ID document URL
+  businessDocuments       String[]  // Legacy field - URLs to uploaded verification docs
+
+  verificationStatus      String    @default("unverified") // 'unverified' | 'pending' | 'verified' | 'rejected'
+  verificationSubmittedAt DateTime? // When verification was submitted
+  verifiedAt              DateTime?
+  verifiedBy              String?   // Admin user ID who verified
+  rejectionReason         String?
+
+  // Cached counters for performance (updated on create/join actions)
+  cachedSightingsCount      Int @default(0) // Total sightings posted
+  cachedHuntsCreatedCount   Int @default(0) // Total hunts created
+  cachedHuntsJoinedCount    Int @default(0) // Total hunts joined/participated
+  cachedCompletedHuntsCount Int @default(0) // Total COMPLETED hunts (created or joined)
+  cachedSuccessRate         Float @default(0) // Average success rate from COMPLETED hunts only
+  cachedLastUpdated         DateTime @default(now()) // When cached stats were last updated
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  accounts          Account[]
+  sessions          Session[]
+  sightings         Sighting[]
+  hunts             Hunt[]
+  huntParticipants  HuntParticipant[]
+  comments          Comment[]
+  likes             Like[]
+  following         Follow[]  @relation("UserFollowing")
+  followers         Follow[]  @relation("UserFollowers")
+  cityBadges        CityBadge[]
+
+  // Chat relations
+  ownedChatGroups   ChatGroup[] @relation("ChatGroupOwner")
+  chatMemberships   ChatMembership[]
+  chatMessages      ChatMessage[]
+  chatJoinRequests  ChatJoinRequest[]
+  businessSubscriptions BusinessChatSubscription[]
+  messageReactions  MessageReaction[]
+
+  // Business service relations
+  roomTypes         RoomType[]
+  tourExperiences   TourExperience[] @relation("TourExperiences")
+
+  @@index([userType])
+  @@index([verificationStatus])
+  @@index([latitude, longitude])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Sighting {
+  id            String    @id @default(cuid())
+  userId        String
+  huntId        String?   // Optional - links sighting to a hunt's shared album
+  caption       String?
+  latitude      Float
+  longitude     Float
+  location      String
+
+  // Image optimization: thumbnails for grids, full resolution for feeds
+  images        String[]  // Full resolution image URLs (used in feed views)
+  thumbnails    String[]  // Thumbnail URLs (400x400, used in profile/album grids)
+
+  videos        String[]  // Array of video URLs
+  sightingType  String    @default("realtime") // "realtime" or "past"
+  sightingDate  DateTime? // Optional - actual date/time when the aurora was seen
+  sightingTime  String?   // Optional - time component if needed separately
+  timezone      String?   // Optional - timezone of the sighting
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hunt        Hunt?    @relation(fields: [huntId], references: [id], onDelete: Cascade)
+  comments    Comment[]
+  likes       Like[]
+  sharedInMessages ChatMessage[] // Messages that share this sighting
+
+  // Performance indexes
+  @@index([createdAt])
+  @@index([userId])
+  @@index([huntId])
+  @@index([sightingDate])
+  @@index([latitude, longitude])
+  @@index([userId, createdAt]) // Composite for user's sightings timeline
+}
+
+model Hunt {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String   // Creator
+  coverImage  String?  // 16:9 landscape cover image URL (1600x900)
+  additionalInfoUrl String? // URL for additional information
+  whatsappNumber String? // WhatsApp number with country code (no spaces, dashes, or plus signs)
+  startDate   DateTime
+  endDate     DateTime
+  timezone    String?  @default("UTC") // Timezone of the meeting point (e.g., "America/New_York", "UTC", "GMT+8")
+  latitude    Float?
+  longitude   Float?
+  location    String?
+  hideLocation Boolean @default(false)
+  isPublic    Boolean  @default(true)
+  hideFromPublic Boolean @default(false) // Hide from public hunt listings (only accessible via link)
+  isPaid      Boolean  @default(false)
+  price       Float?
+  capacity    Int?
+  allowWaitlist Boolean @default(false) // Allow waitlist when hunt is at full capacity
+  cancellationPolicy String? // Cancellation policy for paid hunts
+  hasParticipantsInTransition Boolean @default(false) // Prevents settings changes when users are in transition states
+
+  // Cached statistics for performance (updated when sightings posted or hunt completes)
+  cachedSuccessRate         Float?    @default(0) // Success rate: (nights with sightings / total nights) × 100
+  cachedSightingsCount      Int?      @default(0) // Count of unique nights with sightings
+  cachedUniqueParticipants  Int?      @default(0) // Count of unique users who posted sightings
+  cachedStatsLastUpdated    DateTime? // When cached stats were last recalculated
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  participants HuntParticipant[]
+  sightings   Sighting[]
+  sharedInMessages ChatMessage[] // Messages that share this hunt
+  chatGroup   ChatGroup? // Optional hunt group chat
+
+  @@index([startDate])
+  @@index([latitude, longitude])
+}
+
+model HuntParticipant {
+  id        String   @id @default(cuid())
+  huntId    String
+  userId    String
+  status    String   @default("pending") // pending, confirmed, cancelled, waitlisted
+  paymentStatus String? @default("pending") // pending, confirmed, cancelled - for manual payment tracking
+  paidAt    DateTime?
+  joinedAt  DateTime @default(now())
+
+  // Edge case tracking fields
+  requestExpiresAt DateTime? // When pending request/payment expires (7 days)
+  rejectionCount   Int       @default(0) // Number of times rejected by owner
+  isPaymentProcessing Boolean @default(false) // Prevent double payment attempts
+  lastRejectedAt   DateTime? // When last rejection occurred
+  waitlistPosition Int?      // Position in waitlist (for FIFO ordering)
+
+  // Payment tracking
+  stripePaymentIntentId String? @unique // Stripe PaymentIntent ID
+  stripeCheckoutSessionId String? @unique // Stripe Checkout Session ID
+  paymentAmount Float? // Amount paid in the currency
+  paymentCurrency String? @default("usd") // Currency code (usd, eur, etc.)
+
+  hunt      Hunt     @relation(fields: [huntId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([huntId, userId])
+  @@index([requestExpiresAt]) // For cleanup job queries
+  @@index([waitlistPosition]) // For efficient waitlist ordering
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  content    String
+  userId     String
+  sightingId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sighting   Sighting @relation(fields: [sightingId], references: [id], onDelete: Cascade)
+
+  @@index([sightingId])
+}
+
+model Like {
+  id         String   @id @default(cuid())
+  userId     String
+  sightingId String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sighting   Sighting @relation(fields: [sightingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sightingId])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String   // User who is following
+  followingId String   // User being followed
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model CityBadge {
+  id          String   @id @default(cuid())
+  userId      String
+  city        String   // City name
+  country     String   // Country name
+  countryCode String   // For flag emoji (e.g., "FI", "SE", "NO")
+  latitude    Float
+  longitude   Float
+  earnedAt    DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, city, country])
+  @@index([userId])
+}
+
+// ============================================
+// CHAT SYSTEM MODELS
+// ============================================
+
+model ChatGroup {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+
+  // Type & Ownership
+  groupType       String   // 'area' | 'business_public' | 'business_private' | 'hunt' | 'direct_message'
+  visibility      String   // 'public' | 'private'
+
+  // Location (optional for hunt/DM chats)
+  countryCode     String?  @default("FI")
+  countryName     String?  @default("Finland")
+  areaName        String?   // 'Levi', 'Muonio', 'Rovaniemi', 'Inari', 'Saariselkä' (null for hunt/DM)
+  latitude        Float?
+  longitude       Float?
+
+  // Business Ownership (null for area chats)
+  ownerId         String?
+  owner           User?    @relation("ChatGroupOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  businessCategory String? // Mirrors owner's category
+
+  // Hunt Chat (null for non-hunt chats)
+  huntId          String?  @unique
+  hunt            Hunt?    @relation(fields: [huntId], references: [id], onDelete: Cascade)
+
+  // Linked Chats (pair public + private)
+  linkedChatId    String?  @unique
+  linkedChat      ChatGroup? @relation("LinkedChats", fields: [linkedChatId], references: [id], onDelete: SetNull)
+  pairedChat      ChatGroup? @relation("LinkedChats")
+
+  // Settings
+  isActive        Boolean  @default(true)
+  memberLimit     Int?     // For private chats (e.g., 50 max)
+  requireApproval Boolean  @default(false) // True for private business chats
+
+  // Moderation Settings
+  slowModeSeconds Int?     // Null = off, 30 = 30 seconds between messages
+
+  // Metadata
+  avatarUrl       String?
+  memberCount     Int      @default(0)
+  messageCount    Int      @default(0)
+
+  // Verification Badge
+  isVerified      Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members         ChatMembership[]
+  messages        ChatMessage[]
+  joinRequests    ChatJoinRequest[]
+
+  @@index([countryCode, areaName])
+  @@index([groupType, visibility])
+  @@index([isActive])
+  @@index([ownerId])
+  @@index([huntId])
+}
+
+model ChatMembership {
+  id            String   @id @default(cuid())
+  chatGroupId   String
+  userId        String
+
+  role          String   @default("member") // 'owner' | 'moderator' | 'member'
+  status        String   @default("active") // 'active' | 'muted' | 'banned'
+
+  // Activity Tracking
+  lastReadAt    DateTime?
+  unreadCount   Int      @default(0)
+
+  // Moderation
+  mutedUntil    DateTime?
+  mutedReason   String?
+  bannedAt      DateTime?
+  bannedBy      String?   // userId
+  banReason     String?
+
+  joinedAt      DateTime @default(now())
+
+  chatGroup     ChatGroup @relation(fields: [chatGroupId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatGroupId, userId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id            String   @id @default(cuid())
+  chatGroupId   String
+  userId        String
+
+  content       String   @db.Text
+  contentFiltered String? @db.Text // Auto-filtered version
+  messageType   String   @default("text") // 'text' | 'image' | 'system' | 'sighting_share' | 'hunt_share'
+
+  // Attachments (max 3 images)
+  images        String[]
+
+  // Shared Content
+  sharedSightingId String?
+  sharedHuntId     String?
+  sharedSighting   Sighting? @relation(fields: [sharedSightingId], references: [id], onDelete: SetNull)
+  sharedHunt       Hunt?     @relation(fields: [sharedHuntId], references: [id], onDelete: SetNull)
+
+  // Moderation
+  isPinned      Boolean  @default(false)
+  pinnedBy      String?
+  pinnedAt      DateTime?
+  isEdited      Boolean  @default(false)
+  isDeleted     Boolean  @default(false)
+  deletedBy     String?
+  deletedReason String?
+
+  // Auto-moderation Flags
+  hasProfanity  Boolean  @default(false)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  chatGroup     ChatGroup @relation(fields: [chatGroupId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reactions     MessageReaction[]
+
+  @@index([chatGroupId, createdAt])
+  @@index([userId])
+  @@index([sharedSightingId])
+  @@index([sharedHuntId])
+}
+
+model ChatJoinRequest {
+  id              String   @id @default(cuid())
+  chatGroupId     String
+  userId          String
+
+  status          String   @default("pending") // 'pending' | 'approved' | 'rejected'
+  message         String?  // Optional message from user
+
+  // Review
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  responseMessage String?  // Optional message from business
+
+  createdAt       DateTime @default(now())
+
+  chatGroup       ChatGroup @relation(fields: [chatGroupId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatGroupId, userId])
+  @@index([status])
+  @@index([userId])
+}
+
+model ModerationLog {
+  id              String   @id @default(cuid())
+  chatGroupId     String
+  moderatorId     String
+  targetUserId    String?  // User who was moderated
+  targetMessageId String?  // Message that was moderated
+
+  action          String   // 'delete_message' | 'mute_user' | 'ban_user' | 'pin_message' | 'slow_mode_enabled' | 'slow_mode_disabled'
+  reason          String?
+  duration        Int?     // For mutes/slow mode (seconds)
+
+  createdAt       DateTime @default(now())
+
+  @@index([chatGroupId, createdAt])
+  @@index([moderatorId])
+}
+
+model BusinessChatSubscription {
+  id                    String   @id @default(cuid())
+  businessUserId        String
+
+  // Area & Category
+  areaName              String   // 'Levi', 'Muonio', etc.
+  businessCategory      String   // For pricing calculation
+
+  // Two chat groups
+  publicChatId          String   @unique
+  privateChatId         String   @unique
+
+  // Stripe Integration
+  stripeCustomerId      String?
+  stripeSubscriptionId  String?  @unique
+  stripePriceId         String?
+
+  // Status
+  status                String   // 'trialing' | 'active' | 'paused' | 'past_due' | 'cancelled' | 'expired'
+
+  // Pricing
+  monthlyPrice          Float    // €59-79 depending on category
+  currency              String   @default("EUR")
+  billingPeriod         String   // 'monthly' | 'annual'
+
+  // Dates
+  trialStartDate        DateTime
+  trialEndDate          DateTime
+  startDate             DateTime
+  currentPeriodEnd      DateTime
+
+  // Pause Feature (max 3 months/year)
+  pausedAt              DateTime?
+  pauseMonthsUsed       Int      @default(0)
+
+  // Cancellation
+  cancelAt              DateTime?
+  cancelledAt           DateTime?
+  cancellationReason    String?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  businessUser          User     @relation(fields: [businessUserId], references: [id], onDelete: Cascade)
+
+  @@unique([businessUserId, areaName]) // One subscription per business per area
+  @@index([businessUserId])
+  @@index([status])
+  @@index([areaName])
+}
+
+model MessageReaction {
+  id            String   @id @default(cuid())
+  messageId     String
+  userId        String
+  emoji         String   // '❤️' | '👍' | '🔥' | '👀' | '🙏'
+
+  createdAt     DateTime @default(now())
+
+  message       ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+// ============================================
+// BUSINESS SERVICE MODELS
+// ============================================
+
+model RoomType {
+  id                String   @id @default(cuid())
+  businessId        String
+  business          User     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Business-editable fields
+  name              String
+  description       String?  @db.Text
+  capacity          Int      // Number of guests
+  priceFrom         Float?   // Starting price per night
+  currency          String   @default("EUR")
+
+  // Images (array of URLs)
+  images            String[] // URLs to room photos (max 10)
+  coverImage        String?  // Primary image URL
+
+  // Amenities
+  amenities         String[] // ["Private Sauna", "Heated Glass Roof", "WiFi"]
+
+  // Booking URLs (business provides, we inject affiliate params)
+  bookingComUrl     String?  // Original URL from business
+  agodaUrl          String?  // Original URL from business
+  directBookingUrl  String?  // Business's own booking system
+
+  // Platform-controlled (businesses CANNOT edit directly)
+  // affiliateLinks JSON structure: { "booking": "...", "agoda": "...", "direct": "..." }
+  affiliateLinks    Json?
+
+  // Status
+  isActive          Boolean  @default(true)
+  displayOrder      Int      @default(0) // For sorting rooms
+
+  // Analytics
+  viewCount         Int      @default(0)
+  clickCount        Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([businessId, isActive])
+}
+
+model TourExperience {
+  id                String   @id @default(cuid())
+  businessId        String
+  business          User     @relation("TourExperiences", fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Business-editable fields
+  name              String
+  description       String?  @db.Text
+  duration          String   // "3 hours", "Full day", "2-3 hours"
+  groupSizeMin      Int?     // Minimum group size
+  groupSizeMax      Int?     // Maximum group size
+  difficulty        String?  // "Easy", "Moderate", "Challenging"
+  season            String?  // "Winter only", "Year-round", "Sept-March"
+
+  // Pricing
+  priceFrom         Float?   // Starting price per person
+  currency          String   @default("EUR")
+
+  // Media
+  images            String[] // URLs to tour photos (max 10)
+  coverImage        String?  // Primary image URL
+
+  // Details
+  highlights        String[] // ["Professional guide", "Photos included", "Warm clothing provided"]
+  included          String[] // ["Hotel pickup", "Equipment", "Hot drinks"]
+
+  // Booking URLs
+  directBookingUrl  String?  // Business's own booking system
+  getYourGuideUrl   String?
+  viatorUrl         String?
+  tripAdvisorUrl    String?
+
+  // Platform-controlled affiliate links
+  // affiliateLinks JSON structure: { "direct": "...", "getYourGuide": "...", "viator": "..." }
+  affiliateLinks    Json?
+
+  // Status
+  isActive          Boolean  @default(true)
+  displayOrder      Int      @default(0)
+
+  // Analytics
+  viewCount         Int      @default(0)
+  clickCount        Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([businessId, isActive])
+}
+
+model AffiliateClick {
+  id                String   @id @default(cuid())
+
+  // What was clicked
+  businessId        String
+  roomTypeId        String?  // Optional: specific room
+  platform          String   // 'booking' | 'agoda' | 'direct'
+  destinationUrl    String   // The affiliate URL
+
+  // Who clicked
+  userId            String?  // If logged in
+  sessionId         String?  // Anonymous tracking
+
+  // Context
+  sourceUrl         String?  // Where they came from
+  deviceType        String?  // 'mobile' | 'desktop'
+
+  // Conversion tracking (can be updated via webhook if available)
+  converted         Boolean  @default(false)
+  conversionValue   Float?
+  conversionDate    DateTime?
+
+  clickedAt         DateTime @default(now())
+
+  @@index([businessId, clickedAt])
+  @@index([platform])
+  @@index([roomTypeId])
+}

@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0e17;
+  --foreground: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0e17;
+    --foreground: #ffffff;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Leaflet overrides */
+.leaflet-popup-content-wrapper {
+  background: #1a1f2e;
+  color: white;
+  border-radius: 12px;
+  padding: 0;
+}
+
+.leaflet-popup-content {
+  margin: 0;
+}
+
+.leaflet-popup-close-button {
+  color: white !important;
+  font-size: 20px;
+}
+
+.leaflet-popup-tip {
+  background: #1a1f2e;
+}
+
+/* Remove Leaflet attribution prefix */
+.leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* Custom map styling for precise colors */
+/* Land: #222222 (dark gray), Water: #D3D3D3 (light gray), Text: #FFFFFF (white) */
+
+/* Lighten the water while keeping land dark */
+.map-base-layer {
+  filter: brightness(1.1) contrast(1.05);
+}
+
+/* Ensure labels are bright white */
+.map-labels-layer {
+  filter: brightness(1.2) contrast(1.3);
+}
+
+/* Custom cluster marker styling for better visibility */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background-color: rgba(0, 217, 255, 0.5) !important;
+  border: 3px solid rgba(0, 217, 255, 0.9) !important;
+  border-radius: 50%;
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background-color: rgba(0, 217, 255, 0.9) !important;
+  color: white !important;
+  font-weight: bold !important;
+  font-size: 16px !important;
+  border: 3px solid white !important;
+  border-radius: 50%;
+  box-shadow: 0 0 15px rgba(0, 217, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.marker-cluster-small span,
+.marker-cluster-medium span,
+.marker-cluster-large span {
+  line-height: 1 !important;
+  display: block;
+}
