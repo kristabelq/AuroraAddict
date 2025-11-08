@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
+import BusinessDashboardLayout from "@/components/BusinessDashboardLayout";
 
 interface AnalyticsOverview {
   totalViews: number;
@@ -100,29 +101,34 @@ export default function AnalyticsPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-purple-950/20 to-black">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-t-aurora-green border-r-aurora-blue border-b-transparent border-l-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading analytics...</p>
+      <BusinessDashboardLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-t-aurora-green border-r-aurora-blue border-b-transparent border-l-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading analytics...</p>
+          </div>
         </div>
-      </div>
+      </BusinessDashboardLayout>
     );
   }
 
   if (!analyticsData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-purple-950/20 to-black">
-        <div className="text-center">
-          <p className="text-gray-400">No analytics data available</p>
+      <BusinessDashboardLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-gray-400">No analytics data available</p>
+          </div>
         </div>
-      </div>
+      </BusinessDashboardLayout>
     );
   }
 
   const hasNoData = analyticsData.roomTypes.items.length === 0 && analyticsData.tours.items.length === 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black pb-24">
+    <BusinessDashboardLayout>
+      <div className="min-h-screen pb-24">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -418,5 +424,6 @@ export default function AnalyticsPage() {
         )}
       </div>
     </div>
+    </BusinessDashboardLayout>
   );
 }

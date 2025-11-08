@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import toast from "react-hot-toast";
+import BusinessDashboardLayout from "@/components/BusinessDashboardLayout";
 
 interface TourExperience {
   id: string;
@@ -322,14 +323,17 @@ export default function ToursPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-400">Loading...</div>
-      </div>
+      <BusinessDashboardLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-gray-400">Loading...</div>
+        </div>
+      </BusinessDashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black pb-24">
+    <BusinessDashboardLayout>
+      <div className="min-h-screen pb-24">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -992,5 +996,6 @@ export default function ToursPage() {
         )}
       </div>
     </div>
+    </BusinessDashboardLayout>
   );
 }
