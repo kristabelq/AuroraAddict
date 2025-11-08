@@ -212,6 +212,67 @@ export default function PublicProfilePage({
     }
   };
 
+  // Analytics tracking functions
+  const trackRoomTypeView = async (roomTypeId: string) => {
+    try {
+      await fetch(`/api/analytics/room-types/${roomTypeId}/view`, {
+        method: "POST",
+      });
+    } catch (error) {
+      // Silently fail - analytics shouldn't block user experience
+      console.error("Error tracking room type view:", error);
+    }
+  };
+
+  const trackRoomTypeClick = async (roomTypeId: string) => {
+    try {
+      await fetch(`/api/analytics/room-types/${roomTypeId}/click`, {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Error tracking room type click:", error);
+    }
+  };
+
+  const trackTourView = async (tourId: string) => {
+    try {
+      await fetch(`/api/analytics/tours/${tourId}/view`, {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Error tracking tour view:", error);
+    }
+  };
+
+  const trackTourClick = async (tourId: string) => {
+    try {
+      await fetch(`/api/analytics/tours/${tourId}/click`, {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Error tracking tour click:", error);
+    }
+  };
+
+  // Track views when room types or tours are displayed
+  useEffect(() => {
+    if (!profile) return;
+
+    // Track room type views
+    if (profile.roomTypes && profile.roomTypes.length > 0) {
+      profile.roomTypes.forEach((roomType) => {
+        trackRoomTypeView(roomType.id);
+      });
+    }
+
+    // Track tour views
+    if (profile.tours && profile.tours.length > 0) {
+      profile.tours.forEach((tour) => {
+        trackTourView(tour.id);
+      });
+    }
+  }, [profile]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -676,6 +737,7 @@ export default function PublicProfilePage({
                           href={roomType.bookingComUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackRoomTypeClick(roomType.id)}
                           className="flex-1 px-3 py-2 bg-[#003580] hover:bg-[#00488F] text-white text-xs font-medium rounded text-center transition-colors"
                         >
                           Booking.com
@@ -686,6 +748,7 @@ export default function PublicProfilePage({
                           href={roomType.agodaUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackRoomTypeClick(roomType.id)}
                           className="flex-1 px-3 py-2 bg-[#D60000] hover:bg-[#E61010] text-white text-xs font-medium rounded text-center transition-colors"
                         >
                           Agoda
@@ -696,6 +759,7 @@ export default function PublicProfilePage({
                           href={roomType.directBookingUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackRoomTypeClick(roomType.id)}
                           className="flex-1 px-3 py-2 bg-aurora-green hover:bg-aurora-green/80 text-black text-xs font-medium rounded text-center transition-colors"
                         >
                           Book Direct
@@ -823,6 +887,7 @@ export default function PublicProfilePage({
                           href={tour.getYourGuideUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackTourClick(tour.id)}
                           className="flex-1 min-w-[120px] px-3 py-2 bg-[#FF6B35] hover:bg-[#FF7E4D] text-white text-xs font-medium rounded text-center transition-colors"
                         >
                           GetYourGuide
@@ -833,6 +898,7 @@ export default function PublicProfilePage({
                           href={tour.viatorUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackTourClick(tour.id)}
                           className="flex-1 min-w-[120px] px-3 py-2 bg-[#00A699] hover:bg-[#00B8AA] text-white text-xs font-medium rounded text-center transition-colors"
                         >
                           Viator
@@ -843,6 +909,7 @@ export default function PublicProfilePage({
                           href={tour.tripadvisorUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackTourClick(tour.id)}
                           className="flex-1 min-w-[120px] px-3 py-2 bg-[#00AA6C] hover:bg-[#00BB7D] text-white text-xs font-medium rounded text-center transition-colors"
                         >
                           TripAdvisor
@@ -853,6 +920,7 @@ export default function PublicProfilePage({
                           href={tour.directBookingUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackTourClick(tour.id)}
                           className="flex-1 min-w-[120px] px-3 py-2 bg-aurora-green hover:bg-aurora-green/80 text-black text-xs font-medium rounded text-center transition-colors"
                         >
                           Book Direct
