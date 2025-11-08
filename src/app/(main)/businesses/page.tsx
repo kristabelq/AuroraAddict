@@ -21,6 +21,14 @@ interface RoomTypePreview {
   currency: string;
 }
 
+interface TourPreview {
+  id: string;
+  name: string;
+  coverImage: string | null;
+  priceFrom: number | null;
+  currency: string;
+}
+
 interface Business {
   id: string;
   name: string | null;
@@ -38,8 +46,10 @@ interface Business {
   _count: {
     sightings: number;
     roomTypes: number;
+    tourExperiences: number;
   };
   roomTypePreview: RoomTypePreview | null;
+  tourPreview: TourPreview | null;
 }
 
 export default function BusinessesPage() {
@@ -244,6 +254,13 @@ export default function BusinessesPage() {
                       fill
                       className="object-cover"
                     />
+                  ) : business.tourPreview?.coverImage ? (
+                    <Image
+                      src={business.tourPreview.coverImage}
+                      alt={business.businessName || "Business"}
+                      fill
+                      className="object-cover"
+                    />
                   ) : business.image ? (
                     <Image
                       src={business.image}
@@ -322,6 +339,9 @@ export default function BusinessesPage() {
                     )}
                     {business._count.roomTypes > 0 && (
                       <span>{business._count.roomTypes} room types</span>
+                    )}
+                    {business._count.tourExperiences > 0 && (
+                      <span>{business._count.tourExperiences} tours</span>
                     )}
                   </div>
                 </div>

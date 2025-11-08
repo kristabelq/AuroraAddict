@@ -74,6 +74,7 @@ export async function GET(req: Request) {
           select: {
             sightings: true,
             roomTypes: true,
+            tourExperiences: true,
           },
         },
       },
@@ -85,11 +86,13 @@ export async function GET(req: Request) {
       skip: offset,
     });
 
-    // For accommodation businesses, get a preview of their room types
-    const businessesWithRooms = await Promise.all(
+    // For accommodation and tour businesses, get previews
+    const businessesWithPreviews = await Promise.all(
       businesses.map(async (business) => {
         let roomTypePreview = null;
+        let tourPreview = null;
 
+        // Get room type preview for accommodation businesses
         if (business.businessServices?.includes("accommodation")) {
           const roomTypes = await prisma.roomType.findMany({
             where: {
@@ -113,15 +116,40 @@ export async function GET(req: Request) {
           roomTypePreview = roomTypes[0] || null;
         }
 
+        // Get tour preview for tour operator businesses
+        if (business.businessServices?.includes("tours")) {
+          const tours = await prisma.tourExperience.findMany({
+            where: {
+              businessId: business.id,
+              isActive: true,
+            },
+            select: {
+              id: true,
+              name: true,
+              coverImage: true,
+              priceFrom: true,
+              currency: true,
+            },
+            orderBy: [
+              { displayOrder: "asc" },
+              { createdAt: "desc" },
+            ],
+            take: 1, // Just get one for preview
+          });
+
+          tourPreview = tours[0] || null;
+        }
+
         return {
           ...business,
           roomTypePreview,
+          tourPreview,
         };
       })
     );
 
     return NextResponse.json({
-      businesses: businessesWithRooms,
+      businesses: businessesWithPreviews,
       pagination: {
         total,
         limit,

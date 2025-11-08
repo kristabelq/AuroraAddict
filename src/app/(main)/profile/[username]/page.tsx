@@ -48,6 +48,30 @@ interface RoomType {
   clickCount: number;
 }
 
+interface TourExperience {
+  id: string;
+  name: string;
+  description: string | null;
+  duration: string | null;
+  minGroupSize: number | null;
+  maxGroupSize: number | null;
+  difficulty: string | null;
+  season: string | null;
+  highlights: string[];
+  priceFrom: number | null;
+  currency: string;
+  images: string[];
+  coverImage: string | null;
+  getYourGuideUrl: string | null;
+  viatorUrl: string | null;
+  tripadvisorUrl: string | null;
+  directBookingUrl: string | null;
+  isActive: boolean;
+  displayOrder: number;
+  viewCount: number;
+  clickCount: number;
+}
+
 interface ProfileData {
   id: string;
   name: string | null;
@@ -70,6 +94,7 @@ interface ProfileData {
   averageSuccessRate: number;
   sightings: Sighting[];
   roomTypes: RoomType[];
+  tours: TourExperience[];
   isOwnProfile: boolean;
   isFollowing: boolean;
 }
@@ -672,6 +697,163 @@ export default function PublicProfilePage({
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex-1 px-3 py-2 bg-aurora-green hover:bg-aurora-green/80 text-black text-xs font-medium rounded text-center transition-colors"
+                        >
+                          Book Direct
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tours & Experiences Section (for tour operator businesses) */}
+        {profile.userType === "business" &&
+         profile.businessServices?.includes("tours") &&
+         profile.tours &&
+         profile.tours.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Tours & Experiences</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {profile.tours.map((tour) => (
+                <div
+                  key={tour.id}
+                  className="bg-white/5 backdrop-blur-sm rounded-lg overflow-hidden hover:bg-white/10 transition-colors"
+                >
+                  {/* Tour Image */}
+                  {tour.coverImage ? (
+                    <div className="relative h-48 w-full">
+                      <Image
+                        src={tour.coverImage}
+                        alt={tour.name}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="relative h-48 w-full bg-gradient-to-br from-aurora-blue to-aurora-purple flex items-center justify-center">
+                      <span className="text-6xl">🚌</span>
+                    </div>
+                  )}
+
+                  {/* Tour Details */}
+                  <div className="p-4">
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      {tour.name}
+                    </h3>
+
+                    {tour.description && (
+                      <p className="text-sm text-gray-300 mb-3 line-clamp-2">
+                        {tour.description}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-4 mb-3 text-sm text-gray-400 flex-wrap">
+                      {tour.duration && (
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span>{tour.duration}</span>
+                        </div>
+                      )}
+                      {(tour.minGroupSize || tour.maxGroupSize) && (
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          <span>
+                            {tour.minGroupSize && tour.maxGroupSize
+                              ? `${tour.minGroupSize}-${tour.maxGroupSize} people`
+                              : tour.minGroupSize
+                              ? `Min ${tour.minGroupSize} people`
+                              : `Max ${tour.maxGroupSize} people`}
+                          </span>
+                        </div>
+                      )}
+                      {tour.priceFrom && (
+                        <div className="text-aurora-green font-semibold">
+                          From {tour.currency} {tour.priceFrom}
+                        </div>
+                      )}
+                    </div>
+
+                    {tour.highlights && tour.highlights.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {tour.highlights.slice(0, 2).map((highlight, index) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 bg-white/10 rounded text-xs text-gray-300"
+                          >
+                            {highlight}
+                          </span>
+                        ))}
+                        {tour.highlights.length > 2 && (
+                          <span className="px-2 py-1 bg-white/10 rounded text-xs text-gray-400">
+                            +{tour.highlights.length - 2} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {(tour.difficulty || tour.season) && (
+                      <div className="flex items-center gap-3 mb-3 text-xs text-gray-400">
+                        {tour.difficulty && (
+                          <span className="px-2 py-1 bg-white/5 rounded">
+                            Difficulty: {tour.difficulty}
+                          </span>
+                        )}
+                        {tour.season && (
+                          <span className="px-2 py-1 bg-white/5 rounded">
+                            Season: {tour.season}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Booking Links */}
+                    <div className="flex gap-2 flex-wrap">
+                      {tour.getYourGuideUrl && (
+                        <a
+                          href={tour.getYourGuideUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 min-w-[120px] px-3 py-2 bg-[#FF6B35] hover:bg-[#FF7E4D] text-white text-xs font-medium rounded text-center transition-colors"
+                        >
+                          GetYourGuide
+                        </a>
+                      )}
+                      {tour.viatorUrl && (
+                        <a
+                          href={tour.viatorUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 min-w-[120px] px-3 py-2 bg-[#00A699] hover:bg-[#00B8AA] text-white text-xs font-medium rounded text-center transition-colors"
+                        >
+                          Viator
+                        </a>
+                      )}
+                      {tour.tripadvisorUrl && (
+                        <a
+                          href={tour.tripadvisorUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 min-w-[120px] px-3 py-2 bg-[#00AA6C] hover:bg-[#00BB7D] text-white text-xs font-medium rounded text-center transition-colors"
+                        >
+                          TripAdvisor
+                        </a>
+                      )}
+                      {tour.directBookingUrl && (
+                        <a
+                          href={tour.directBookingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 min-w-[120px] px-3 py-2 bg-aurora-green hover:bg-aurora-green/80 text-black text-xs font-medium rounded text-center transition-colors"
                         >
                           Book Direct
                         </a>

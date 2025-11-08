@@ -201,6 +201,22 @@ export async function GET(
       });
     }
 
+    // For business accounts, include tour experiences
+    let tours = [];
+    if (user.userType === "business" && user.businessServices?.includes("tours")) {
+      tours = await prisma.tourExperience.findMany({
+        where: {
+          businessId: user.id,
+          isActive: true,
+        },
+        orderBy: [
+          { displayOrder: "asc" },
+          { createdAt: "desc" },
+        ],
+        take: 6, // Show first 6 tours on profile
+      });
+    }
+
     return NextResponse.json({
       id: user.id,
       name: user.name,
@@ -223,6 +239,7 @@ export async function GET(
       averageSuccessRate: averageSuccessRate,
       sightings: user.sightings,
       roomTypes: roomTypes,
+      tours: tours,
       isOwnProfile,
       isFollowing,
     });
