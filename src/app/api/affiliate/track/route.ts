@@ -14,7 +14,17 @@ export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
     const body = await request.json();
 
-    const { businessId, roomTypeId, tourExperienceId, platform } = body;
+    const {
+      businessId,
+      roomTypeId,
+      tourExperienceId,
+      platform,
+      ctaVariantId, // A/B testing variant
+      utmSource,    // UTM tracking params
+      utmMedium,
+      utmCampaign,
+      sessionId,    // Frontend session ID for attribution
+    } = body;
 
     // Validate required fields
     if (!businessId || !platform) {
@@ -141,14 +151,15 @@ export async function POST(request: Request) {
       });
     }
 
-    // Get device type from user agent
+    // Get device type and user agent
     const userAgent = request.headers.get('user-agent') || '';
     const deviceType = userAgent.toLowerCase().includes('mobile') ? 'mobile' : 'desktop';
 
     // Get referer/source
     const sourceUrl = request.headers.get('referer') || undefined;
+    const referrer = request.headers.get('referer') || undefined;
 
-    // Create affiliate click record
+    // Create affiliate click record with enhanced tracking
     await prisma.affiliateClick.create({
       data: {
         businessId,
@@ -157,11 +168,30 @@ export async function POST(request: Request) {
         platform,
         destinationUrl: affiliateUrl,
         userId: session?.user?.id || null,
-        sessionId: null, // Could implement session tracking
+        sessionId: sessionId || null,
         sourceUrl,
         deviceType,
+        userAgent,
+        referrer,
+        utmSource: utmSource || null,
+        utmMedium: utmMedium || null,
+        utmCampaign: utmCampaign || null,
+        ctaVariantId: ctaVariantId || null,
       }
     });
+
+    // If CTA variant was provided, increment its click count
+    if (ctaVariantId) {
+      await prisma.cTAVariant.update({
+        where: { id: ctaVariantId },
+        data: {
+          clicks: { increment: 1 },
+        },
+      }).catch((error) => {
+        console.error('Error incrementing CTA variant clicks:', error);
+        // Don't fail the whole request if variant tracking fails
+      });
+    }
 
     // Return affiliate URL
     return NextResponse.json({

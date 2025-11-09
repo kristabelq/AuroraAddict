@@ -121,6 +121,14 @@ model User {
   reviewResponses   ReviewResponse[] @relation("ReviewResponses") // Responses to reviews
   reviewHelpfulVotes ReviewHelpful[] @relation("ReviewHelpfulVotes") // Helpful votes cast
 
+  // Affiliate Performance (for business accounts)
+  totalAffiliateClicks       Int      @default(0)
+  totalConversions           Int      @default(0)
+  conversionRate             Float    @default(0) // Percentage
+  totalCommissionEarned      Float    @default(0) // In EUR
+  estimatedMonthlyCommission Float    @default(0)
+  performanceLastUpdated     DateTime @default(now())
+
   @@index([userType])
   @@index([verificationStatus])
   @@index([latitude, longitude])
@@ -654,18 +662,44 @@ model AffiliateClick {
   // Context
   sourceUrl         String?  // Where they came from
   deviceType        String?  // 'mobile' | 'desktop'
+  userAgent         String?  // Browser/device info
+  referrer          String?  // HTTP referrer
+  utmSource         String?  // UTM tracking params
+  utmMedium         String?
+  utmCampaign       String?
+
+  // A/B Testing
+  ctaVariantId      String?  // Which CTA button variant was clicked
 
   // Conversion tracking (can be updated via webhook if available)
   converted         Boolean  @default(false)
-  conversionValue   Float?
+  conversionValue   Float?   // Booking total
+  conversionCurrency String? @default("EUR")
   conversionDate    DateTime?
+  conversionSource  String?  // 'webhook' | 'manual' | 'estimated'
+
+  // Commission calculation
+  commissionRate    Float?   // Platform commission rate (%)
+  estimatedCommission Float? // Calculated commission in EUR
+
+  // Booking reference
+  bookingReference  String?  // Platform's booking ID
+  checkInDate       DateTime? // For accommodation bookings
+  checkOutDate      DateTime? // For accommodation bookings
+  guests            Int?     // Number of guests
+  nights            Int?     // Number of nights (accommodation)
 
   clickedAt         DateTime @default(now())
+
+  ctaVariant        CTAVariant? @relation(fields: [ctaVariantId], references: [id], onDelete: SetNull)
 
   @@index([businessId, clickedAt])
   @@index([platform])
   @@index([roomTypeId])
   @@index([tourExperienceId])
+  @@index([converted])
+  @@index([ctaVariantId])
+  @@index([conversionDate])
 }
 
 // ============================================
@@ -762,4 +796,93 @@ model ReviewHelpful {
 
   @@unique([reviewId, userId]) // One vote per user per review
   @@index([reviewId])
+}
+
+// ============================================
+// CONVERSION TRACKING & OPTIMIZATION
+// ============================================
+
+model ConversionEvent {
+  id                String   @id @default(cuid())
+
+  // Source
+  platform          String   // 'booking' | 'agoda' | 'getyourguide' | 'viator' etc.
+  eventType         String   // 'booking' | 'confirmation' | 'cancellation' | 'completion'
+
+  // Linked Data
+  affiliateClickId  String?  // Link back to original click if possible
+  businessId        String   // Which business
+  roomTypeId        String?
+  tourExperienceId  String?
+
+  // Event Details
+  bookingReference  String?  // Platform's booking ID
+  bookingValue      Float?   // Total booking value
+  currency          String?  @default("EUR")
+  commission        Float?   // Actual commission earned
+  commissionCurrency String? @default("EUR")
+
+  // Booking Details
+  checkInDate       DateTime?
+  checkOutDate      DateTime?
+  guests            Int?
+  nights            Int?
+
+  // Webhook Data
+  webhookPayload    Json?    // Raw webhook data
+  webhookSignature  String?  // For verification
+  processingStatus  String   @default("pending") // 'pending' | 'processed' | 'failed' | 'duplicate'
+  processingError   String?
+
+  // Customer Info (if available, hashed/anonymized)
+  customerEmail     String?  // Hashed email for deduplication
+  customerId        String?  // Platform's customer ID
+
+  receivedAt        DateTime @default(now())
+  processedAt       DateTime?
+
+  @@index([platform, eventType])
+  @@index([businessId, receivedAt])
+  @@index([bookingReference])
+  @@index([processingStatus])
+  @@index([affiliateClickId])
+}
+
+model CTAVariant {
+  id                String   @id @default(cuid())
+
+  // Business & Service
+  businessId        String?  // Null = platform-wide test
+  serviceType       String?  // 'accommodation' | 'tours' | null for all
+
+  // Variant Details
+  name              String   // "Green Bold Button", "Red Subtle", "Blue Animated"
+  buttonText        String   // "Book Now" | "Check Availability" | "Reserve Your Spot"
+  buttonColor       String   // Hex color code
+  buttonStyle       String   // 'solid' | 'outline' | 'ghost'
+  placement         String   // 'top' | 'bottom' | 'both'
+  size              String   @default("medium") // 'small' | 'medium' | 'large'
+
+  // A/B Test Settings
+  isActive          Boolean  @default(true)
+  trafficAllocation Float    @default(50) // Percentage of traffic (0-100)
+  startDate         DateTime @default(now())
+  endDate           DateTime?
+
+  // Performance Metrics (updated periodically)
+  impressions       Int      @default(0) // Times shown
+  clicks            Int      @default(0) // Times clicked
+  conversions       Int      @default(0) // Times resulted in booking
+  clickThroughRate  Float    @default(0) // CTR %
+  conversionRate    Float    @default(0) // CR %
+  revenue           Float    @default(0) // Total revenue generated
+  lastUpdated       DateTime @default(now())
+
+  createdAt         DateTime @default(now())
+
+  affiliateClicks   AffiliateClick[] // Clicks using this variant
+
+  @@index([businessId, isActive])
+  @@index([serviceType])
+  @@index([isActive, startDate])
 }
