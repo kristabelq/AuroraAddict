@@ -27,8 +27,10 @@ export default function SolarFlaresPage() {
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     fetchSolarFlareData();
     // Refresh every 5 minutes
     const interval = setInterval(fetchSolarFlareData, 5 * 60 * 1000);
@@ -202,14 +204,14 @@ export default function SolarFlaresPage() {
 
   // Custom dot renderer for highlighting M and X class flares
   const renderCustomDot = (props: any) => {
-    const { cx, cy, payload } = props;
+    const { cx, cy, payload, index } = props;
 
     if (payload.isMajor) {
       const color = payload.class === 'X' ? '#ff0000' : '#ffaa00';
       return (
-        <g>
-          <circle cx={cx} cy={cy} r={6} fill={color} stroke="#fff" strokeWidth={2} />
-          <circle cx={cx} cy={cy} r={10} fill="none" stroke={color} strokeWidth={1} opacity={0.5} />
+        <g key={`major-flare-${index || payload.timestamp}`}>
+          <circle key={`inner-${index || payload.timestamp}`} cx={cx} cy={cy} r={6} fill={color} stroke="#fff" strokeWidth={2} />
+          <circle key={`outer-${index || payload.timestamp}`} cx={cx} cy={cy} r={10} fill="none" stroke={color} strokeWidth={1} opacity={0.5} />
         </g>
       );
     }
@@ -297,7 +299,9 @@ export default function SolarFlaresPage() {
             </div>
             <div className="text-right">
               <div className="text-xs text-gray-500">Last updated</div>
-              <div className="text-sm text-gray-400">{formatTime(lastUpdate.toISOString())}</div>
+              <div className="text-sm text-gray-400">
+                {mounted ? formatTime(lastUpdate.toISOString()) : '--'}
+              </div>
             </div>
           </div>
         </div>
@@ -503,7 +507,7 @@ export default function SolarFlaresPage() {
                                 </div>
                               </div>
                               <div className="text-sm text-gray-300 mb-1">
-                                {formatTime(flare.time)}
+                                {mounted ? formatTime(flare.time) : '--'}
                               </div>
                               <div className="text-xs text-gray-400">
                                 X-ray flux: {flare.flux.toExponential(2)} W/m²
@@ -624,7 +628,7 @@ export default function SolarFlaresPage() {
                       {getTimeSince(currentFlare.time)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
-                      {formatTime(currentFlare.time)}
+                      {mounted ? formatTime(currentFlare.time) : '--'}
                     </div>
                   </div>
                 </div>
@@ -717,7 +721,9 @@ export default function SolarFlaresPage() {
                           {flare.intensity.toFixed(1)}
                         </div>
                         <div>
-                          <div className="text-white font-medium">{formatTime(flare.time)}</div>
+                          <div className="text-white font-medium">
+                            {mounted ? formatTime(flare.time) : '--'}
+                          </div>
                           <div className="text-sm text-gray-400">
                             {flare.flux.toExponential(2)} W/m²
                           </div>
