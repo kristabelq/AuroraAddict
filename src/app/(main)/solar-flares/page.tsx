@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import TimeHeader from "@/components/TimeHeader";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, Dot } from 'recharts';
 
 interface FlareData {
   time: string;
@@ -11,10 +12,19 @@ interface FlareData {
   flux: number;
 }
 
+interface ChartDataPoint {
+  timestamp: number;
+  time: string;
+  flux: number;
+  class: string;
+  isMajor: boolean; // M or X class
+}
+
 export default function SolarFlaresPage() {
   const router = useRouter();
   const [currentFlare, setCurrentFlare] = useState<FlareData | null>(null);
   const [flareHistory, setFlareHistory] = useState<FlareData[]>([]);
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
@@ -35,10 +45,15 @@ export default function SolarFlaresPage() {
       if (data && data.length > 0) {
         // Process all flare data from last 7 days
         const processedFlares: FlareData[] = [];
+        const chartPoints: ChartDataPoint[] = [];
 
-        for (let i = data.length - 1; i >= Math.max(0, data.length - 168); i--) {
+        // Get data from last 3 days for chart (higher resolution)
+        const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
+
+        for (let i = data.length - 1; i >= 0; i--) {
           const reading = data[i];
           const flux = parseFloat(reading.flux);
+          const timestamp = new Date(reading.time_tag).getTime();
 
           let flareClass = "A";
           let intensity = 0;
@@ -60,13 +75,32 @@ export default function SolarFlaresPage() {
             intensity = flux / 1e-8;
           }
 
-          processedFlares.push({
+          const flareData = {
             time: reading.time_tag,
             class: flareClass,
             intensity: parseFloat(intensity.toFixed(1)),
             flux: flux,
-          });
+          };
+
+          // Add to processed flares if within last 7 days
+          if (i >= Math.max(0, data.length - 168)) {
+            processedFlares.push(flareData);
+          }
+
+          // Add to chart data if within last 3 days
+          if (timestamp >= threeDaysAgo) {
+            chartPoints.push({
+              timestamp,
+              time: reading.time_tag,
+              flux,
+              class: flareClass,
+              isMajor: flareClass === 'M' || flareClass === 'X'
+            });
+          }
         }
+
+        // Reverse chart data to show oldest to newest
+        chartPoints.reverse();
 
         // Set current flare (most recent)
         setCurrentFlare(processedFlares[0]);
@@ -76,6 +110,7 @@ export default function SolarFlaresPage() {
           (flare) => flare.class === "X" || flare.class === "M" || flare.class === "C"
         );
         setFlareHistory(significantFlares.slice(0, 20));
+        setChartData(chartPoints);
       }
 
       setLastUpdate(new Date());
@@ -146,6 +181,41 @@ export default function SolarFlaresPage() {
     return "Just now";
   };
 
+  // Chart formatting helpers
+  const formatXAxisTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (24 * 60 * 60 * 1000));
+
+    if (diffDays >= 2) return '2 days ago';
+    if (diffDays >= 1) return 'yesterday';
+    return 'today';
+  };
+
+  const formatFluxValue = (value: number) => {
+    if (value >= 1e-4) return 'X';
+    if (value >= 1e-5) return 'M';
+    if (value >= 1e-6) return 'C';
+    if (value >= 1e-7) return 'B';
+    return 'A';
+  };
+
+  // Custom dot renderer for highlighting M and X class flares
+  const renderCustomDot = (props: any) => {
+    const { cx, cy, payload } = props;
+
+    if (payload.isMajor) {
+      const color = payload.class === 'X' ? '#ff0000' : '#ffaa00';
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={6} fill={color} stroke="#fff" strokeWidth={2} />
+          <circle cx={cx} cy={cy} r={10} fill="none" stroke={color} strokeWidth={1} opacity={0.5} />
+        </g>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0e17] pb-24">
       <TimeHeader />
@@ -194,6 +264,129 @@ export default function SolarFlaresPage() {
           </div>
         ) : (
           <>
+            {/* X-Ray Flux Chart */}
+            {chartData.length > 0 && currentFlare && (
+              <div className="bg-black/80 backdrop-blur-lg rounded-2xl border border-white/10 overflow-hidden">
+                <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-4 border-b border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-bold text-white mb-1">Solar Flare Detection</h2>
+                      <p className="text-sm text-gray-400">GOES-16 X-Ray Flux (1-8 Angstrom)</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-gray-500 mb-1">Current</div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-bold" style={{ color: getFlareColor(currentFlare.class) }}>
+                          {currentFlare.class}{currentFlare.intensity.toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="relative p-4" style={{ backgroundColor: '#000' }}>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={chartData} margin={{ top: 10, right: 60, left: 10, bottom: 30 }}>
+                      {/* Color-coded flare class zones */}
+                      <ReferenceArea y1={1e-4} y2={1e-3} fill="#ff0000" fillOpacity={0.15} />
+                      <ReferenceArea y1={1e-5} y2={1e-4} fill="#ffaa00" fillOpacity={0.15} />
+                      <ReferenceArea y1={1e-6} y2={1e-5} fill="#ffff00" fillOpacity={0.15} />
+                      <ReferenceArea y1={1e-7} y2={1e-6} fill="#7fff00" fillOpacity={0.15} />
+                      <ReferenceArea y1={1e-8} y2={1e-7} fill="#00ff00" fillOpacity={0.15} />
+
+                      {/* Grid */}
+                      <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+
+                      {/* X-Axis (Time) */}
+                      <XAxis
+                        dataKey="timestamp"
+                        type="number"
+                        domain={['dataMin', 'dataMax']}
+                        tickFormatter={formatXAxisTime}
+                        stroke="#999"
+                        tick={{ fill: '#999' }}
+                        ticks={[
+                          chartData[0]?.timestamp || 0,
+                          chartData[Math.floor(chartData.length / 3)]?.timestamp || 0,
+                          chartData[Math.floor(2 * chartData.length / 3)]?.timestamp || 0,
+                        ]}
+                        label={{ value: 'Time', position: 'bottom', fill: '#999', offset: 10 }}
+                      />
+
+                      {/* Y-Axis (Log scale flux) */}
+                      <YAxis
+                        scale="log"
+                        domain={[1e-8, 1e-3]}
+                        tickFormatter={(value) => value.toExponential(0)}
+                        stroke="#999"
+                        tick={{ fill: '#999' }}
+                        ticks={[1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3]}
+                        width={60}
+                      />
+
+                      {/* Flare class reference lines */}
+                      <ReferenceLine y={1e-4} stroke="#ff0000" strokeDasharray="3 3" label={{ value: 'X', position: 'right', fill: '#ff0000', fontSize: 14, fontWeight: 'bold' }} />
+                      <ReferenceLine y={1e-5} stroke="#ffaa00" strokeDasharray="3 3" label={{ value: 'M', position: 'right', fill: '#ffaa00', fontSize: 14, fontWeight: 'bold' }} />
+                      <ReferenceLine y={1e-6} stroke="#ffff00" strokeDasharray="3 3" label={{ value: 'C', position: 'right', fill: '#ffff00', fontSize: 14, fontWeight: 'bold' }} />
+                      <ReferenceLine y={1e-7} stroke="#7fff00" strokeDasharray="3 3" label={{ value: 'B', position: 'right', fill: '#7fff00', fontSize: 14, fontWeight: 'bold' }} />
+                      <ReferenceLine y={1e-8} stroke="#00ff00" strokeDasharray="3 3" label={{ value: 'A', position: 'right', fill: '#00ff00', fontSize: 14, fontWeight: 'bold' }} />
+
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '8px' }}
+                        labelStyle={{ color: '#fff' }}
+                        formatter={(value: any, name: string, props: any) => [
+                          `${props.payload.class}${props.payload.intensity?.toFixed(1)} (${value.toExponential(2)} W/m²)`,
+                          'X-Ray Flux'
+                        ]}
+                        labelFormatter={(timestamp: number) => new Date(timestamp).toLocaleString()}
+                      />
+
+                      {/* Main flux line */}
+                      <Line
+                        type="monotone"
+                        dataKey="flux"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        dot={renderCustomDot as any}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+
+                  {/* Class labels on right side */}
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs font-bold space-y-12">
+                    <div className="text-[#ff0000] bg-black/70 px-2 py-1 rounded">X</div>
+                    <div className="text-[#ffaa00] bg-black/70 px-2 py-1 rounded">M</div>
+                    <div className="text-[#ffff00] bg-black/70 px-2 py-1 rounded">C</div>
+                    <div className="text-[#7fff00] bg-black/70 px-2 py-1 rounded">B</div>
+                    <div className="text-[#00ff00] bg-black/70 px-2 py-1 rounded">A</div>
+                  </div>
+                </div>
+
+                {/* Chart legend */}
+                <div className="bg-gray-900/50 p-3 border-t border-white/10">
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <div className="flex items-center gap-4">
+                      <span>Data provided by: NOAA/SWPC</span>
+                      <span>•</span>
+                      <span>Updates every 5 minutes</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded-full bg-[#ff0000]"></div>
+                        <span>X-class</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded-full bg-[#ffaa00]"></div>
+                        <span>M-class</span>
+                      </div>
+                      <span className="text-gray-600">= Major flares highlighted</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Current Flare Status */}
             {currentFlare && (
               <div className="bg-gradient-to-br from-yellow-900/40 to-amber-900/40 backdrop-blur-lg rounded-2xl p-8 border border-yellow-500/30">
