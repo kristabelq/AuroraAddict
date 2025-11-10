@@ -216,6 +216,52 @@ export default function SolarFlaresPage() {
     return null;
   };
 
+  // Calculate aurora probability window (1-3 days after flare)
+  const getAuroraWindow = (flareTime: string) => {
+    const flareDate = new Date(flareTime);
+    const now = new Date();
+    const hoursSinceFlare = (now.getTime() - flareDate.getTime()) / (1000 * 60 * 60);
+
+    const windowStart = 24; // 1 day
+    const windowEnd = 72; // 3 days
+
+    if (hoursSinceFlare < windowStart) {
+      const hoursUntilWindow = windowStart - hoursSinceFlare;
+      return {
+        status: 'approaching',
+        message: `Aurora window opens in ${Math.floor(hoursUntilWindow)} hours`,
+        hoursUntil: Math.floor(hoursUntilWindow),
+        daysUntil: Math.ceil(hoursUntilWindow / 24),
+        inWindow: false
+      };
+    } else if (hoursSinceFlare >= windowStart && hoursSinceFlare <= windowEnd) {
+      const hoursRemaining = windowEnd - hoursSinceFlare;
+      return {
+        status: 'active',
+        message: `Aurora window ACTIVE - ${Math.floor(hoursRemaining)} hours remaining`,
+        hoursRemaining: Math.floor(hoursRemaining),
+        inWindow: true
+      };
+    } else {
+      return {
+        status: 'passed',
+        message: 'Aurora window has passed',
+        inWindow: false
+      };
+    }
+  };
+
+  // Get recent major flares (M and X class only)
+  const getRecentMajorFlares = () => {
+    const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
+    return flareHistory
+      .filter(flare => {
+        const flareTime = new Date(flare.time).getTime();
+        return (flare.class === 'M' || flare.class === 'X') && flareTime >= threeDaysAgo;
+      })
+      .slice(0, 5); // Show top 5 most recent
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0e17] pb-24">
       <TimeHeader />
@@ -381,6 +427,171 @@ export default function SolarFlaresPage() {
                         <span>M-class</span>
                       </div>
                       <span className="text-gray-600">= Major flares highlighted</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recent M and X Class Flare Alerts */}
+            {getRecentMajorFlares().length > 0 && (
+              <div className="bg-gradient-to-br from-red-900/30 via-orange-900/30 to-yellow-900/30 backdrop-blur-lg rounded-2xl border-2 border-orange-500/40 overflow-hidden">
+                <div className="bg-gradient-to-r from-red-900/50 to-orange-900/50 p-4 border-b border-orange-500/30">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-orange-500/20 rounded-lg">
+                      <svg className="w-6 h-6 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-white">Major Flare Activity Alert</h2>
+                      <p className="text-sm text-orange-200">Recent M/X class flares - Aurora probability tracking</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  {getRecentMajorFlares().map((flare, index) => {
+                    const window = getAuroraWindow(flare.time);
+                    const isXClass = flare.class === 'X';
+                    const flareColor = isXClass ? 'red' : 'orange';
+
+                    return (
+                      <div
+                        key={index}
+                        className={`relative bg-gradient-to-r ${
+                          isXClass
+                            ? 'from-red-900/40 to-red-800/40 border-red-500/50'
+                            : 'from-orange-900/40 to-orange-800/40 border-orange-500/50'
+                        } border-2 rounded-xl p-5 ${
+                          window.inWindow ? 'ring-4 ring-green-500/50 animate-pulse' : ''
+                        }`}
+                      >
+                        {/* Active window badge */}
+                        {window.inWindow && (
+                          <div className="absolute -top-3 -right-3 bg-green-500 text-white px-4 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1 animate-pulse">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            AURORA WINDOW ACTIVE
+                          </div>
+                        )}
+
+                        <div className="flex items-start justify-between gap-4">
+                          {/* Flare info */}
+                          <div className="flex items-center gap-4 flex-1">
+                            <div
+                              className={`w-20 h-20 rounded-xl flex flex-col items-center justify-center ${
+                                isXClass ? 'bg-red-500/30' : 'bg-orange-500/30'
+                              } border-2 ${isXClass ? 'border-red-500' : 'border-orange-500'}`}
+                            >
+                              <div className={`text-3xl font-bold ${isXClass ? 'text-red-300' : 'text-orange-300'}`}>
+                                {flare.class}{flare.intensity.toFixed(1)}
+                              </div>
+                              <div className="text-xs text-gray-400 uppercase tracking-wider">Flare</div>
+                            </div>
+
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                  isXClass ? 'bg-red-500/20 text-red-300' : 'bg-orange-500/20 text-orange-300'
+                                }`}>
+                                  {isXClass ? 'MAJOR FLARE' : 'MODERATE FLARE'}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  Detected {getTimeSince(flare.time)}
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-300 mb-1">
+                                {formatTime(flare.time)}
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                X-ray flux: {flare.flux.toExponential(2)} W/m²
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Aurora probability window */}
+                          <div className="text-right min-w-[200px]">
+                            <div className="text-xs text-gray-400 mb-1 uppercase tracking-wider">Aurora Probability</div>
+                            <div className={`text-lg font-bold mb-2 ${
+                              window.status === 'active' ? 'text-green-400' :
+                              window.status === 'approaching' ? 'text-yellow-400' :
+                              'text-gray-500'
+                            }`}>
+                              {window.status === 'active' ? '🌟 HIGH' :
+                               window.status === 'approaching' ? '⏳ RISING' :
+                               '❌ LOW'}
+                            </div>
+                            <div className={`text-sm mb-2 ${
+                              window.status === 'active' ? 'text-green-300' :
+                              window.status === 'approaching' ? 'text-yellow-300' :
+                              'text-gray-400'
+                            }`}>
+                              {window.message}
+                            </div>
+
+                            {/* Countdown/Progress bar */}
+                            {window.status !== 'passed' && (
+                              <div className="mt-3">
+                                <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                                  <span>1 day</span>
+                                  <span>3 days</span>
+                                </div>
+                                <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full transition-all ${
+                                      window.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'
+                                    }`}
+                                    style={{
+                                      width: window.status === 'active'
+                                        ? `${((72 - (window.hoursRemaining || 0)) / 48) * 100}%`
+                                        : `${((24 - (window.hoursUntil || 0)) / 24) * 100}%`
+                                    }}
+                                  ></div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* CME reminder */}
+                        {window.status !== 'passed' && (
+                          <div className="mt-4 pt-4 border-t border-white/10">
+                            <div className="flex items-start gap-2 text-xs text-yellow-200">
+                              <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span>
+                                <strong>Remember:</strong> Check CME coronagraph data to confirm if this flare launched an Earth-directed CME.
+                                Only CMEs produce auroras - the flare itself indicates potential but not certainty.
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Summary banner */}
+                  <div className="mt-4 bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/30 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-purple-500/20 rounded-lg">
+                        <svg className="w-5 h-5 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-semibold text-purple-200 mb-1">
+                          📚 Aurora Hunting Tips
+                        </div>
+                        <ul className="text-xs text-gray-300 space-y-1">
+                          <li>• M and X class flares have highest CME probability (60-90%)</li>
+                          <li>• Aurora window peaks 1-3 days after flare detection</li>
+                          <li>• Check solar wind speed and Bz orientation for best aurora forecasting</li>
+                          <li>• Active window = Plan your aurora hunt NOW!</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
