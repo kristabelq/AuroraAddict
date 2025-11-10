@@ -49,8 +49,9 @@ export default function SolarFlaresPage() {
         const processedFlares: FlareData[] = [];
         const chartPoints: ChartDataPoint[] = [];
 
-        // Get data from last 3 days for chart (higher resolution)
+        // Timestamp-based filtering for consistent results
         const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
+        const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
         for (let i = data.length - 1; i >= 0; i--) {
           const reading = data[i];
@@ -84,8 +85,8 @@ export default function SolarFlaresPage() {
             flux: flux,
           };
 
-          // Add to processed flares if within last 7 days
-          if (i >= Math.max(0, data.length - 168)) {
+          // Add to processed flares if within last 7 days (timestamp-based)
+          if (timestamp >= sevenDaysAgo) {
             processedFlares.push(flareData);
           }
 
@@ -111,6 +112,17 @@ export default function SolarFlaresPage() {
         const significantFlares = processedFlares.filter(
           (flare) => flare.class === "X" || flare.class === "M" || flare.class === "C"
         );
+
+        // Debug logging
+        const majorFlares = significantFlares.filter(f => f.class === 'M' || f.class === 'X');
+        console.log('🔥 Major flares found:', majorFlares.length);
+        console.log('🔥 Major flares:', majorFlares.slice(0, 5).map(f => ({
+          class: f.class,
+          intensity: f.intensity,
+          time: f.time,
+          age: Math.floor((Date.now() - new Date(f.time).getTime()) / (1000 * 60 * 60)) + 'h ago'
+        })));
+
         setFlareHistory(significantFlares.slice(0, 20));
         setChartData(chartPoints);
       }
