@@ -612,7 +612,7 @@ export default function HuntDetailsPage({
         {/* Hunt Chat Button - Only visible to organizer and confirmed participants */}
         {hunt.chatGroup && (hunt.isCreator || hunt.isUserParticipant) && (
           <button
-            onClick={() => router.push(`/chats/${hunt.chatGroup.id}`)}
+            onClick={() => hunt.chatGroup && router.push(`/chats/${hunt.chatGroup.id}`)}
             className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white py-4 rounded-xl font-semibold hover:from-purple-600 hover:to-blue-600 transition-colors mb-6 flex items-center justify-center gap-2 shadow-lg"
           >
             <svg

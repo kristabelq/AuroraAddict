@@ -20,8 +20,8 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma
 
   // Handle cleanup on hot reload
-  if (module.hot) {
-    module.hot.dispose(() => {
+  if ((module as any).hot) {
+    (module as any).hot.dispose(() => {
       prisma.$disconnect()
     })
   }

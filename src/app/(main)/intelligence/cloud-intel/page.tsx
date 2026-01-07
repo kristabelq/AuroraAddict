@@ -464,7 +464,7 @@ export default function CloudIntelPage() {
 
               <div className="overflow-x-auto">
                 <div className="inline-flex gap-3 pb-4">
-                  {cloudData.hourly.cloud_cover.slice(0, 12).map((_, idx: number) => {
+                  {cloudData.hourly.cloud_cover.slice(0, 12).map((_: unknown, idx: number) => {
                     const low = cloudData.hourly.cloud_cover_low[idx] || 0;
                     const mid = cloudData.hourly.cloud_cover_mid[idx] || 0;
                     const high = cloudData.hourly.cloud_cover_high[idx] || 0;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { generateTourAffiliateLinks } from "@/lib/affiliate-injector";
 
 // PUT - Update a tour experience
@@ -90,7 +91,7 @@ export async function PUT(
         getYourGuideUrl: getYourGuideUrl?.trim() || null,
         viatorUrl: viatorUrl?.trim() || null,
         tripAdvisorUrl: tripAdvisorUrl?.trim() || null,
-        affiliateLinks,
+        affiliateLinks: affiliateLinks as Prisma.JsonObject,
         isActive: isActive,
         displayOrder: displayOrder !== undefined ? parseInt(displayOrder) : undefined,
       },

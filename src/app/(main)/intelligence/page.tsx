@@ -3464,12 +3464,14 @@ export default function IntelligencePage() {
                     // PRIORITY 1B: Latitude too low for current Kp
                     else if (huntLocationCoords && !latitudeCheck.canSee) {
                       const minKp = latitudeCheck.minKpRequired;
-                      // Check if we're in northern or southern hemisphere
-                      const isNorthernHemisphere = huntLat >= 0;
-                      gate2Verdict = isNorthernHemisphere
-                        ? `GO NORTH, OR YOU NEED AT LEAST KP ${minKp}!`
-                        : `GO SOUTH, OR YOU NEED AT LEAST KP ${minKp}!`;
-                      gate2Message = `Need Kp ${minKp}+ for aurora at your latitude. ${minKp >= 7 ? 'Wait for major geomagnetic storm.' : 'Monitor Kp index for higher activity.'}`;
+                      if (minKp !== null) {
+                        // Check if we're in northern or southern hemisphere
+                        const isNorthernHemisphere = huntLat >= 0;
+                        gate2Verdict = isNorthernHemisphere
+                          ? `GO NORTH, OR YOU NEED AT LEAST KP ${minKp}!`
+                          : `GO SOUTH, OR YOU NEED AT LEAST KP ${minKp}!`;
+                        gate2Message = `Need Kp ${minKp}+ for aurora at your latitude. ${minKp >= 7 ? 'Wait for major geomagnetic storm.' : 'Monitor Kp index for higher activity.'}`;
+                      }
                     }
                     // PRIORITY 2: Daylight - If it's daytime, cloud cover doesn't matter
                     else if (daylightStatus === "Day") {
@@ -3743,7 +3745,7 @@ export default function IntelligencePage() {
                         {(() => {
                           // Define huntLat and huntLng at the top level for all recommendations
                           const huntLat = huntLocationCoords?.lat || 0;
-                          const huntLng = huntLocationCoords?.lng || 0;
+                          const huntLng = huntLocationCoords?.lon || 0;
 
                           // 1. Impossible latitude - suggest countries to fly to
                           if (gate2Verdict === "YOU'RE TOO FAR FROM THE POLES!") {

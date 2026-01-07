@@ -25,7 +25,7 @@ try {
 }
 
 // Custom words to add to the filter (can be configured based on community feedback)
-const customBadWords = [
+const customBadWords: string[] = [
   // Add custom inappropriate words here if needed
   // Example: 'spam', 'scam', etc.
 ];

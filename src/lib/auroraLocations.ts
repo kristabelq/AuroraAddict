@@ -958,7 +958,7 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
 /**
  * Get the minimum Kp index required to see aurora at a given latitude
  */
-export function getMinKpForLatitude(latitude: number): number {
+export function getMinKpForLatitude(latitude: number): number | null {
   const absLat = Math.abs(latitude);
 
   if (absLat >= 65) return 1;

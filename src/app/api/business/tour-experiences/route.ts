@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { generateAffiliateLinks, validateBookingUrl } from '@/lib/affiliate-injector';
+import { Prisma } from '@prisma/client';
+import { generateTourAffiliateLinks, validateBookingUrl } from '@/lib/affiliate-injector';
 
 /**
  * GET /api/business/tour-experiences
@@ -173,7 +174,7 @@ export async function POST(request: Request) {
     }
 
     // Generate affiliate links
-    const affiliateLinks = generateAffiliateLinks({
+    const affiliateLinks = generateTourAffiliateLinks({
       directBookingUrl,
       getYourGuideUrl,
       viatorUrl,
@@ -201,7 +202,7 @@ export async function POST(request: Request) {
         getYourGuideUrl: getYourGuideUrl || null,
         viatorUrl: viatorUrl || null,
         tripAdvisorUrl: tripAdvisorUrl || null,
-        affiliateLinks,
+        affiliateLinks: affiliateLinks as Prisma.JsonObject,
         displayOrder: body.displayOrder || 0,
       }
     });

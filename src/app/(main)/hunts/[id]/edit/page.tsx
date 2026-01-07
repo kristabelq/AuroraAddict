@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import LocationAutocomplete from "@/components/forms/LocationAutocomplete";
@@ -9,13 +9,13 @@ import toast from "react-hot-toast";
 export default function EditHuntPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const huntId = params.id;
+  const { id: huntId } = use(params);
   const [formData, setFormData] = useState({
     name: "",
     description: "",

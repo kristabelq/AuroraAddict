@@ -372,27 +372,27 @@ export default function BusinessProfilePage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => handleChatAction(
+                  onClick={() => business.publicChat && handleChatAction(
                     business.publicChat.id,
                     business.publicChat.isMember,
                     business.publicChat.hasPendingRequest
                   )}
-                  disabled={joiningChat === business.publicChat.id}
+                  disabled={!business.publicChat || joiningChat === business.publicChat.id}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${
-                    business.publicChat.isMember
+                    business.publicChat?.isMember
                       ? "bg-white/10 text-white hover:bg-white/20"
-                      : business.publicChat.hasPendingRequest
+                      : business.publicChat?.hasPendingRequest
                       ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                       : "bg-aurora-green text-black hover:bg-aurora-green/80"
                   }`}
                 >
-                  {business.publicChat.isMember
+                  {business.publicChat?.isMember
                     ? "Open Chat"
-                    : joiningChat === business.publicChat.id
-                    ? business.publicChat.hasPendingRequest
+                    : joiningChat === business.publicChat?.id
+                    ? business.publicChat?.hasPendingRequest
                       ? "Cancelling..."
                       : "Joining..."
-                    : business.publicChat.hasPendingRequest
+                    : business.publicChat?.hasPendingRequest
                     ? "Cancel Request"
                     : "Join"}
                 </button>
@@ -428,27 +428,27 @@ export default function BusinessProfilePage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => handleChatAction(
+                  onClick={() => business.privateChat && handleChatAction(
                     business.privateChat.id,
                     business.privateChat.isMember,
                     business.privateChat.hasPendingRequest
                   )}
-                  disabled={joiningChat === business.privateChat.id}
+                  disabled={!business.privateChat || joiningChat === business.privateChat.id}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${
-                    business.privateChat.isMember
+                    business.privateChat?.isMember
                       ? "bg-white/10 text-white hover:bg-white/20"
-                      : business.privateChat.hasPendingRequest
+                      : business.privateChat?.hasPendingRequest
                       ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                       : "bg-aurora-purple text-white hover:bg-aurora-purple/80"
                   }`}
                 >
-                  {business.privateChat.isMember
+                  {business.privateChat?.isMember
                     ? "Open Chat"
-                    : joiningChat === business.privateChat.id
-                    ? business.privateChat.hasPendingRequest
+                    : joiningChat === business.privateChat?.id
+                    ? business.privateChat?.hasPendingRequest
                       ? "Cancelling..."
                       : "Requesting..."
-                    : business.privateChat.hasPendingRequest
+                    : business.privateChat?.hasPendingRequest
                     ? "Cancel Request"
                     : "Request Access"}
                 </button>

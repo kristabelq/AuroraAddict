@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { generateTourAffiliateLinks } from "@/lib/affiliate-injector";
 
 // GET - List all tour experiences for the current business
@@ -140,7 +141,7 @@ export async function POST(req: Request) {
         getYourGuideUrl: getYourGuideUrl?.trim() || null,
         viatorUrl: viatorUrl?.trim() || null,
         tripAdvisorUrl: tripAdvisorUrl?.trim() || null,
-        affiliateLinks,
+        affiliateLinks: affiliateLinks as Prisma.JsonObject,
         isActive: isActive !== undefined ? isActive : true,
         displayOrder: displayOrder !== undefined ? parseInt(displayOrder) : 0,
       },

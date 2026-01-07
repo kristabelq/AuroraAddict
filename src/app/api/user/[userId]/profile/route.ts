@@ -186,7 +186,7 @@ export async function GET(
     }
 
     // For business accounts, include room types
-    let roomTypes = [];
+    let roomTypes: any[] = [];
     if (user.userType === "business" && user.businessServices?.includes("accommodation")) {
       roomTypes = await prisma.roomType.findMany({
         where: {
@@ -202,7 +202,7 @@ export async function GET(
     }
 
     // For business accounts, include tour experiences
-    let tours = [];
+    let tours: any[] = [];
     if (user.userType === "business" && user.businessServices?.includes("tours")) {
       tours = await prisma.tourExperience.findMany({
         where: {

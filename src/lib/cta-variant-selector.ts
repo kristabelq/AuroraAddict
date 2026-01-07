@@ -42,13 +42,20 @@ export async function selectCTAVariant(
           { businessId }, // Business-specific variants
           { businessId: null }, // Platform-wide variants
         ],
-        serviceType: {
-          in: [serviceType, null], // Service-specific or all services
-        },
-        isActive: true,
-        OR: [
-          { endDate: null }, // No end date
-          { endDate: { gte: now } }, // Not expired
+        AND: [
+          {
+            OR: [
+              { serviceType }, // Service-specific
+              { serviceType: null }, // All services
+            ],
+          },
+          { isActive: true },
+          {
+            OR: [
+              { endDate: null }, // No end date
+              { endDate: { gte: now } }, // Not expired
+            ],
+          },
         ],
       },
     });

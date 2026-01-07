@@ -159,6 +159,14 @@ export async function POST(request: Request) {
     const sourceUrl = request.headers.get('referer') || undefined;
     const referrer = request.headers.get('referer') || undefined;
 
+    // Ensure affiliateUrl is not null (should have been caught by earlier checks)
+    if (!affiliateUrl) {
+      return NextResponse.json(
+        { error: 'No affiliate URL available' },
+        { status: 404 }
+      );
+    }
+
     // Create affiliate click record with enhanced tracking
     await prisma.affiliateClick.create({
       data: {
