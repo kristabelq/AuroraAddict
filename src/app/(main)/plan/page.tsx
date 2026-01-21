@@ -66,6 +66,36 @@ export default function PlanPage() {
     capacity: "",
   });
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setFormData({ ...formData, coverImage: file });
+      setCoverImagePreview(URL.createObjectURL(file));
+    }
+  };
 
   // Check if we should show create form based on URL parameter
   useEffect(() => {
@@ -737,7 +767,17 @@ export default function PlanPage() {
                 </button>
               </div>
             ) : (
-              <label className="block border-2 border-dashed border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-aurora-green transition-colors">
+              <label
+                className={`block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                  isDragging
+                    ? "border-aurora-green bg-aurora-green/10"
+                    : "border-gray-600 hover:border-aurora-green"
+                }`}
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
                 <input
                   type="file"
                   accept="image/*"
@@ -751,7 +791,7 @@ export default function PlanPage() {
                   className="hidden"
                 />
                 <svg
-                  className="w-12 h-12 mx-auto mb-4 text-gray-400"
+                  className={`w-12 h-12 mx-auto mb-4 ${isDragging ? "text-aurora-green" : "text-gray-400"}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -763,7 +803,9 @@ export default function PlanPage() {
                     d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-                <p className="text-gray-300">Click to upload cover image</p>
+                <p className={isDragging ? "text-aurora-green" : "text-gray-300"}>
+                  {isDragging ? "Drop image here" : "Drag & drop or click to upload"}
+                </p>
                 <p className="text-sm text-gray-500 mt-1">Recommended: Square image (1:1 ratio)</p>
               </label>
             )}

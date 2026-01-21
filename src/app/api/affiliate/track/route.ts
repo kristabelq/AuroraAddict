@@ -14,7 +14,17 @@ export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
     const body = await request.json();
 
-    const { businessId, roomTypeId, platform } = body;
+    const {
+      businessId,
+      roomTypeId,
+      tourExperienceId,
+      platform,
+      ctaVariantId, // A/B testing variant
+      utmSource,    // UTM tracking params
+      utmMedium,
+      utmCampaign,
+      sessionId,    // Frontend session ID for attribution
+    } = body;
 
     // Validate required fields
     if (!businessId || !platform) {
@@ -25,9 +35,17 @@ export async function POST(request: Request) {
     }
 
     // Validate platform
-    if (!['booking', 'agoda', 'direct'].includes(platform)) {
+    if (!['booking', 'agoda', 'direct', 'getyourguide', 'viator', 'tripadvisor'].includes(platform)) {
       return NextResponse.json(
         { error: 'Invalid platform' },
+        { status: 400 }
+      );
+    }
+
+    // Validate that either roomTypeId or tourExperienceId is provided
+    if (!roomTypeId && !tourExperienceId) {
+      return NextResponse.json(
+        { error: 'Either roomTypeId or tourExperienceId is required' },
         { status: 400 }
       );
     }
@@ -78,35 +96,110 @@ export async function POST(request: Request) {
           }
         }
       });
-    } else {
-      // If no room type specified, we might want to redirect to business's main booking page
-      // For now, return error
-      return NextResponse.json(
-        { error: 'roomTypeId is required' },
-        { status: 400 }
-      );
+    } else if (tourExperienceId) {
+      const tourExperience = await prisma.tourExperience.findUnique({
+        where: { id: tourExperienceId },
+        select: {
+          affiliateLinks: true,
+          businessId: true,
+        }
+      });
+
+      if (!tourExperience) {
+        return NextResponse.json(
+          { error: 'Tour experience not found' },
+          { status: 404 }
+        );
+      }
+
+      if (tourExperience.businessId !== businessId) {
+        return NextResponse.json(
+          { error: 'Tour experience does not belong to specified business' },
+          { status: 400 }
+        );
+      }
+
+      // Map platform names to affiliate link keys
+      const platformMap: Record<string, string> = {
+        'getyourguide': 'getYourGuide',
+        'viator': 'viator',
+        'tripadvisor': 'tripAdvisor',
+        'direct': 'direct'
+      };
+
+      const linkKey = platformMap[platform];
+
+      // Extract affiliate URL from JSON
+      const links = tourExperience.affiliateLinks as { [key: string]: string } | null;
+      affiliateUrl = links?.[linkKey] || null;
+
+      if (!affiliateUrl) {
+        return NextResponse.json(
+          { error: `No ${platform} booking link available for this tour` },
+          { status: 404 }
+        );
+      }
+
+      // Increment click counter for this tour
+      await prisma.tourExperience.update({
+        where: { id: tourExperienceId },
+        data: {
+          clickCount: {
+            increment: 1
+          }
+        }
+      });
     }
 
-    // Get device type from user agent
+    // Get device type and user agent
     const userAgent = request.headers.get('user-agent') || '';
     const deviceType = userAgent.toLowerCase().includes('mobile') ? 'mobile' : 'desktop';
 
     // Get referer/source
     const sourceUrl = request.headers.get('referer') || undefined;
+    const referrer = request.headers.get('referer') || undefined;
 
-    // Create affiliate click record
+    // Ensure affiliateUrl is not null (should have been caught by earlier checks)
+    if (!affiliateUrl) {
+      return NextResponse.json(
+        { error: 'No affiliate URL available' },
+        { status: 404 }
+      );
+    }
+
+    // Create affiliate click record with enhanced tracking
     await prisma.affiliateClick.create({
       data: {
         businessId,
         roomTypeId: roomTypeId || null,
+        tourExperienceId: tourExperienceId || null,
         platform,
         destinationUrl: affiliateUrl,
         userId: session?.user?.id || null,
-        sessionId: null, // Could implement session tracking
+        sessionId: sessionId || null,
         sourceUrl,
         deviceType,
+        userAgent,
+        referrer,
+        utmSource: utmSource || null,
+        utmMedium: utmMedium || null,
+        utmCampaign: utmCampaign || null,
+        ctaVariantId: ctaVariantId || null,
       }
     });
+
+    // If CTA variant was provided, increment its click count
+    if (ctaVariantId) {
+      await prisma.cTAVariant.update({
+        where: { id: ctaVariantId },
+        data: {
+          clicks: { increment: 1 },
+        },
+      }).catch((error) => {
+        console.error('Error incrementing CTA variant clicks:', error);
+        // Don't fail the whole request if variant tracking fails
+      });
+    }
 
     // Return affiliate URL
     return NextResponse.json({
@@ -196,6 +289,21 @@ export async function GET(request: Request) {
       orderBy: { clickCount: 'desc' }
     });
 
+    // Get tour-specific stats
+    const tourStats = await prisma.tourExperience.findMany({
+      where: {
+        businessId: session.user.id,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        viewCount: true,
+        clickCount: true
+      },
+      orderBy: { clickCount: 'desc' }
+    });
+
     return NextResponse.json({
       totalClicks,
       clicksByPlatform: clicksByPlatform.reduce((acc, item) => {
@@ -203,7 +311,8 @@ export async function GET(request: Request) {
         return acc;
       }, {} as Record<string, number>),
       recentClicks: recentClicks.length,
-      roomStats
+      roomStats,
+      tourStats
     });
   } catch (error) {
     console.error('Error fetching affiliate stats:', error);

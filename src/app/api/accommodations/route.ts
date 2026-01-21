@@ -90,6 +90,7 @@ export async function GET(request: NextRequest) {
         // Find sightings within ~100km radius (approximately 1 degree)
         const radiusInDegrees = 1.0;
         const nearbySightings = allSightings.filter((sighting) => {
+          if (accommodation.latitude === null || accommodation.longitude === null) return false;
           const latDiff = Math.abs(sighting.latitude - accommodation.latitude);
           const lonDiff = Math.abs(sighting.longitude - accommodation.longitude);
           // Simple distance approximation (good enough for this use case)

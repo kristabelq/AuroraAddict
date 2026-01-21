@@ -98,7 +98,6 @@ export async function PATCH(
         where: { id: messageId },
         data: {
           isDeleted: true,
-          deletedAt: new Date(),
           deletedBy: session.user.id,
         },
       });

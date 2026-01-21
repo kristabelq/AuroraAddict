@@ -1,6 +1,6 @@
-# Aurora Addict
+# Aurora Intel
 
-A web application for aurora chasers to plan their aurora hunt, track sightings, and connect with other enthusiasts worldwide.
+A professional aurora hunting platform connecting tour operators, accommodations, and aurora chasers with real-time intelligence, business insights, and a comprehensive marketplace for aurora tourism.
 
 ## Features
 

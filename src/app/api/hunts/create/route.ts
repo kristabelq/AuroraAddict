@@ -6,6 +6,7 @@ import { writeFile } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
 import { toZonedTime } from "date-fns-tz";
+import { extractCountryFromLocation } from "@/lib/countries";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -163,7 +164,10 @@ export async function POST(req: Request) {
       }),
     ]);
 
-    // Auto-create hunt chat group
+    // Extract country information from hunt location for chat filtering
+    const locationInfo = extractCountryFromLocation(location);
+
+    // Auto-create hunt chat group with location info from hunt
     const chatGroup = await prisma.chatGroup.create({
       data: {
         name: `${name} - Hunt Chat`,
@@ -173,9 +177,9 @@ export async function POST(req: Request) {
         huntId: hunt.id,
         ownerId: session.user.id,
         memberCount: 1,
-        countryCode: null,
-        countryName: null,
-        areaName: null,
+        countryCode: locationInfo.countryCode,
+        countryName: locationInfo.countryName,
+        areaName: locationInfo.areaName,
       },
     });
 

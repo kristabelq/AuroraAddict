@@ -1,0 +1,21 @@
+{
+	"appId": "com.auroraaddict.app",
+	"appName": "Aurora Addict",
+	"webDir": "out",
+	"server": {
+		"url": "http://localhost:3001",
+		"cleartext": true
+	},
+	"ios": {
+		"contentInset": "automatic",
+		"scheme": "Aurora Addict"
+	},
+	"packageClassList": [
+		"CAPCameraPlugin",
+		"GeolocationPlugin",
+		"PushNotificationsPlugin",
+		"SharePlugin",
+		"SplashScreenPlugin",
+		"StatusBarPlugin"
+	]
+}

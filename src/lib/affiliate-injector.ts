@@ -6,9 +6,10 @@
  */
 
 interface AffiliateConfig {
-  platform: 'booking' | 'agoda' | 'expedia';
+  platform: 'booking' | 'agoda' | 'expedia' | 'getyourguide' | 'viator' | 'tripadvisor';
   affiliateId: string;
-  paramName: string; // 'aid' for Booking, 'cid' for Agoda
+  paramName: string; // Primary affiliate parameter name
+  additionalParams?: Record<string, string>; // Additional tracking params
 }
 
 const AFFILIATE_CONFIGS: Record<string, AffiliateConfig> = {
@@ -26,6 +27,32 @@ const AFFILIATE_CONFIGS: Record<string, AffiliateConfig> = {
     platform: 'expedia',
     affiliateId: process.env.EXPEDIA_AFFILIATE_ID || 'aurora-addict',
     paramName: 'AFFID'
+  },
+  getyourguide: {
+    platform: 'getyourguide',
+    affiliateId: process.env.GETYOURGUIDE_PARTNER_ID || 'aurora-addict',
+    paramName: 'partner_id',
+    additionalParams: {
+      utm_medium: 'online_publisher',
+      utm_source: 'aurora_intel'
+    }
+  },
+  viator: {
+    platform: 'viator',
+    affiliateId: process.env.VIATOR_PARTNER_ID || 'aurora-addict',
+    paramName: 'pid',
+    additionalParams: {
+      mcid: '42383',
+      medium: 'link'
+    }
+  },
+  tripadvisor: {
+    platform: 'tripadvisor',
+    affiliateId: process.env.TRIPADVISOR_AFFILIATE_ID || 'aurora-addict',
+    paramName: 'partnerId',
+    additionalParams: {
+      source: 'aurora_intel'
+    }
   }
 };
 
@@ -35,7 +62,7 @@ const AFFILIATE_CONFIGS: Record<string, AffiliateConfig> = {
  */
 export function injectAffiliateParams(
   originalUrl: string,
-  platform: 'booking' | 'agoda' | 'expedia'
+  platform: 'booking' | 'agoda' | 'expedia' | 'getyourguide' | 'viator' | 'tripadvisor'
 ): string | null {
   try {
     const config = AFFILIATE_CONFIGS[platform];
@@ -61,8 +88,17 @@ export function injectAffiliateParams(
     // Inject our affiliate ID
     url.searchParams.set(config.paramName, config.affiliateId);
 
-    // Add tracking label (optional)
-    url.searchParams.set('label', 'aurora-addict');
+    // Add any additional tracking parameters
+    if (config.additionalParams) {
+      Object.entries(config.additionalParams).forEach(([key, value]) => {
+        url.searchParams.set(key, value);
+      });
+    }
+
+    // Add tracking label for accommodation platforms
+    if (['booking', 'agoda'].includes(platform)) {
+      url.searchParams.set('label', 'aurora-addict');
+    }
 
     return url.toString();
   } catch (error) {
@@ -78,7 +114,10 @@ function isValidDomain(hostname: string, platform: string): boolean {
   const validDomains: Record<string, string[]> = {
     booking: ['booking.com', 'www.booking.com'],
     agoda: ['agoda.com', 'www.agoda.com', 'agoda.fi', 'agoda.se', 'agoda.no'],
-    expedia: ['expedia.com', 'www.expedia.com', 'expedia.fi', 'expedia.se']
+    expedia: ['expedia.com', 'www.expedia.com', 'expedia.fi', 'expedia.se'],
+    getyourguide: ['getyourguide.com', 'www.getyourguide.com'],
+    viator: ['viator.com', 'www.viator.com'],
+    tripadvisor: ['tripadvisor.com', 'www.tripadvisor.com', 'tripadvisor.fi', 'tripadvisor.se', 'tripadvisor.no']
   };
 
   const domains = validDomains[platform];
@@ -92,13 +131,16 @@ function isValidDomain(hostname: string, platform: string): boolean {
 /**
  * Detect platform from URL
  */
-export function detectPlatform(url: string): 'booking' | 'agoda' | 'expedia' | 'direct' {
+export function detectPlatform(url: string): 'booking' | 'agoda' | 'expedia' | 'getyourguide' | 'viator' | 'tripadvisor' | 'direct' {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
 
     if (hostname.includes('booking.com')) return 'booking';
     if (hostname.includes('agoda.com')) return 'agoda';
     if (hostname.includes('expedia.com')) return 'expedia';
+    if (hostname.includes('getyourguide.com')) return 'getyourguide';
+    if (hostname.includes('viator.com')) return 'viator';
+    if (hostname.includes('tripadvisor.com')) return 'tripadvisor';
 
     return 'direct';
   } catch {
@@ -120,6 +162,9 @@ export interface AffiliateLinks {
   booking?: string;
   agoda?: string;
   direct?: string;
+  getYourGuide?: string;
+  viator?: string;
+  tripAdvisor?: string;
 }
 
 export function generateAffiliateLinks(urls: BookingUrls): AffiliateLinks {
@@ -138,6 +183,52 @@ export function generateAffiliateLinks(urls: BookingUrls): AffiliateLinks {
     const injected = injectAffiliateParams(urls.agodaUrl, 'agoda');
     if (injected) {
       affiliateLinks.agoda = injected;
+    }
+  }
+
+  // Direct booking URL (no affiliate injection needed)
+  if (urls.directBookingUrl) {
+    affiliateLinks.direct = urls.directBookingUrl;
+  }
+
+  return affiliateLinks;
+}
+
+/**
+ * Generate affiliate links for all provided tour URLs
+ * Returns object with affiliate-injected URLs
+ */
+export interface TourUrls {
+  getYourGuideUrl?: string;
+  viatorUrl?: string;
+  tripAdvisorUrl?: string;
+  directBookingUrl?: string;
+}
+
+export function generateTourAffiliateLinks(urls: TourUrls): AffiliateLinks {
+  const affiliateLinks: AffiliateLinks = {};
+
+  // Process GetYourGuide URL
+  if (urls.getYourGuideUrl) {
+    const injected = injectAffiliateParams(urls.getYourGuideUrl, 'getyourguide');
+    if (injected) {
+      affiliateLinks.getYourGuide = injected;
+    }
+  }
+
+  // Process Viator URL
+  if (urls.viatorUrl) {
+    const injected = injectAffiliateParams(urls.viatorUrl, 'viator');
+    if (injected) {
+      affiliateLinks.viator = injected;
+    }
+  }
+
+  // Process TripAdvisor URL
+  if (urls.tripAdvisorUrl) {
+    const injected = injectAffiliateParams(urls.tripAdvisorUrl, 'tripadvisor');
+    if (injected) {
+      affiliateLinks.tripAdvisor = injected;
     }
   }
 
@@ -202,6 +293,9 @@ export function getPlatformLabel(platform: string): string {
     booking: 'Booking.com',
     agoda: 'Agoda',
     expedia: 'Expedia',
+    getyourguide: 'GetYourGuide',
+    viator: 'Viator',
+    tripadvisor: 'TripAdvisor',
     direct: 'Book Direct'
   };
   return labels[platform] || platform;

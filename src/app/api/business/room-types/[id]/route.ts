@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { generateAffiliateLinks, validateBookingUrl } from '@/lib/affiliate-injector';
 
 /**
@@ -102,7 +103,7 @@ export async function PUT(
         bookingComUrl: bookingComUrl ?? undefined,
         agodaUrl: agodaUrl ?? undefined,
         directBookingUrl: directBookingUrl ?? undefined,
-        affiliateLinks,
+        affiliateLinks: affiliateLinks as Prisma.JsonObject,
         displayOrder: body.displayOrder ?? undefined,
       }
     });

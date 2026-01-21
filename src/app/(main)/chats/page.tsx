@@ -134,7 +134,7 @@ export default function ChatsPage() {
   const [huntStatusFilter, setHuntStatusFilter] = useState<"all" | "upcoming" | "ongoing" | "completed">("all");
 
   // Location filters (for area chats)
-  const [countryFilter, setCountryFilter] = useState<"all" | "FI" | "NO" | "SE">("all");
+  const [countryFilter, setCountryFilter] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
 
   // Business category filter
@@ -523,7 +523,7 @@ export default function ChatsPage() {
       <TimeHeader />
 
       {/* Tab Navigation */}
-      <div className="sticky top-[57px] bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 z-40">
+      <div className="sticky top-[45px] bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 z-40">
         <div className="max-w-2xl mx-auto">
           <div className="p-4">
             <div className="flex gap-2">
@@ -652,9 +652,9 @@ export default function ChatsPage() {
                             {formatDistanceToNow(new Date(chat.lastMessage.createdAt), { addSuffix: true })}
                           </span>
                         )}
-                        {chat.unreadCount && chat.unreadCount > 0 && (
+                        {(chat.unreadCount ?? 0) > 0 && (
                           <div className="bg-aurora-green text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                            {chat.unreadCount > 9 ? "9+" : chat.unreadCount}
+                            {(chat.unreadCount ?? 0) > 9 ? "9+" : chat.unreadCount}
                           </div>
                         )}
                       </div>

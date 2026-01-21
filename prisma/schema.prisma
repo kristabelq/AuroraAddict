@@ -5,7 +5,6 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 model Account {
@@ -40,6 +39,7 @@ model User {
   name              String?
   username          String?   @unique // Unique handle like @kristabelq
   email             String?   @unique
+  password          String?   // Hashed password for email/password authentication
   emailVerified     DateTime?
   image             String?
   bio               String?
@@ -114,6 +114,20 @@ model User {
   // Business service relations
   roomTypes         RoomType[]
   tourExperiences   TourExperience[] @relation("TourExperiences")
+
+  // Review relations
+  reviewsReceived   Review[] @relation("BusinessReviews") // Reviews of this business
+  reviewsWritten    Review[] @relation("UserReviews")     // Reviews written by this user
+  reviewResponses   ReviewResponse[] @relation("ReviewResponses") // Responses to reviews
+  reviewHelpfulVotes ReviewHelpful[] @relation("ReviewHelpfulVotes") // Helpful votes cast
+
+  // Affiliate Performance (for business accounts)
+  totalAffiliateClicks       Int      @default(0)
+  totalConversions           Int      @default(0)
+  conversionRate             Float    @default(0) // Percentage
+  totalCommissionEarned      Float    @default(0) // In EUR
+  estimatedMonthlyCommission Float    @default(0)
+  performanceLastUpdated     DateTime @default(now())
 
   @@index([userType])
   @@index([verificationStatus])
@@ -202,6 +216,7 @@ model Hunt {
   sightings   Sighting[]
   sharedInMessages ChatMessage[] // Messages that share this hunt
   chatGroup   ChatGroup? // Optional hunt group chat
+  reviews     Review[] // Reviews mentioning this hunt
 
   @@index([startDate])
   @@index([latitude, longitude])
@@ -636,7 +651,8 @@ model AffiliateClick {
   // What was clicked
   businessId        String
   roomTypeId        String?  // Optional: specific room
-  platform          String   // 'booking' | 'agoda' | 'direct'
+  tourExperienceId  String?  // Optional: specific tour
+  platform          String   // 'booking' | 'agoda' | 'direct' | 'getyourguide' | 'viator' | 'tripadvisor'
   destinationUrl    String   // The affiliate URL
 
   // Who clicked
@@ -646,15 +662,227 @@ model AffiliateClick {
   // Context
   sourceUrl         String?  // Where they came from
   deviceType        String?  // 'mobile' | 'desktop'
+  userAgent         String?  // Browser/device info
+  referrer          String?  // HTTP referrer
+  utmSource         String?  // UTM tracking params
+  utmMedium         String?
+  utmCampaign       String?
+
+  // A/B Testing
+  ctaVariantId      String?  // Which CTA button variant was clicked
 
   // Conversion tracking (can be updated via webhook if available)
   converted         Boolean  @default(false)
-  conversionValue   Float?
+  conversionValue   Float?   // Booking total
+  conversionCurrency String? @default("EUR")
   conversionDate    DateTime?
+  conversionSource  String?  // 'webhook' | 'manual' | 'estimated'
+
+  // Commission calculation
+  commissionRate    Float?   // Platform commission rate (%)
+  estimatedCommission Float? // Calculated commission in EUR
+
+  // Booking reference
+  bookingReference  String?  // Platform's booking ID
+  checkInDate       DateTime? // For accommodation bookings
+  checkOutDate      DateTime? // For accommodation bookings
+  guests            Int?     // Number of guests
+  nights            Int?     // Number of nights (accommodation)
 
   clickedAt         DateTime @default(now())
+
+  ctaVariant        CTAVariant? @relation(fields: [ctaVariantId], references: [id], onDelete: SetNull)
 
   @@index([businessId, clickedAt])
   @@index([platform])
   @@index([roomTypeId])
+  @@index([tourExperienceId])
+  @@index([converted])
+  @@index([ctaVariantId])
+  @@index([conversionDate])
+}
+
+// ============================================
+// REVIEW & RATING SYSTEM
+// ============================================
+
+model Review {
+  id                String   @id @default(cuid())
+
+  // Who & Where
+  businessId        String   // Business being reviewed
+  userId            String   // Reviewer
+  huntId            String?  // Optional: linked to a specific hunt they attended
+
+  // Review Content
+  rating            Int      // 1-5 stars
+  title             String?  // Optional review title
+  content           String   @db.Text // Review text
+  images            String[] // Photo evidence of experience (max 5)
+
+  // Review Type
+  reviewType        String   @default("general") // 'general' | 'accommodation' | 'tour'
+  serviceType       String?  // Which service: 'room', 'tour', 'restaurant', etc.
+  specificItemId    String?  // ID of specific room/tour if applicable
+
+  // Verification
+  isVerified        Boolean  @default(false) // Verified as legitimate customer
+  verifiedPurchase  Boolean  @default(false) // Confirmed they booked through platform
+
+  // Moderation
+  status            String   @default("pending") // 'pending' | 'approved' | 'rejected' | 'flagged'
+  moderatedBy       String?  // Admin who moderated
+  moderatedAt       DateTime?
+  rejectionReason   String?
+
+  // Metrics
+  helpfulCount      Int      @default(0) // How many found this helpful
+  reportCount       Int      @default(0) // How many flagged as inappropriate
+
+  // Visibility
+  isPublished       Boolean  @default(false)
+  publishedAt       DateTime?
+
+  // Business Response
+  hasResponse       Boolean  @default(false)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  business          User     @relation("BusinessReviews", fields: [businessId], references: [id], onDelete: Cascade)
+  reviewer          User     @relation("UserReviews", fields: [userId], references: [id], onDelete: Cascade)
+  hunt              Hunt?    @relation(fields: [huntId], references: [id], onDelete: SetNull)
+  response          ReviewResponse?
+  helpfulVotes      ReviewHelpful[]
+
+  @@unique([userId, businessId, huntId]) // One review per user per business per hunt
+  @@index([businessId, status, isPublished])
+  @@index([userId])
+  @@index([rating])
+  @@index([createdAt])
+}
+
+model ReviewResponse {
+  id                String   @id @default(cuid())
+  reviewId          String   @unique
+
+  // Response Content
+  content           String   @db.Text
+  respondedBy       String   // Business owner/manager user ID
+
+  // Moderation (businesses can't delete responses, only edit)
+  isEdited          Boolean  @default(false)
+  editedAt          DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  review            Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  responder         User     @relation("ReviewResponses", fields: [respondedBy], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+  @@index([respondedBy])
+}
+
+model ReviewHelpful {
+  id                String   @id @default(cuid())
+  reviewId          String
+  userId            String
+
+  createdAt         DateTime @default(now())
+
+  review            Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user              User     @relation("ReviewHelpfulVotes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, userId]) // One vote per user per review
+  @@index([reviewId])
+}
+
+// ============================================
+// CONVERSION TRACKING & OPTIMIZATION
+// ============================================
+
+model ConversionEvent {
+  id                String   @id @default(cuid())
+
+  // Source
+  platform          String   // 'booking' | 'agoda' | 'getyourguide' | 'viator' etc.
+  eventType         String   // 'booking' | 'confirmation' | 'cancellation' | 'completion'
+
+  // Linked Data
+  affiliateClickId  String?  // Link back to original click if possible
+  businessId        String   // Which business
+  roomTypeId        String?
+  tourExperienceId  String?
+
+  // Event Details
+  bookingReference  String?  // Platform's booking ID
+  bookingValue      Float?   // Total booking value
+  currency          String?  @default("EUR")
+  commission        Float?   // Actual commission earned
+  commissionCurrency String? @default("EUR")
+
+  // Booking Details
+  checkInDate       DateTime?
+  checkOutDate      DateTime?
+  guests            Int?
+  nights            Int?
+
+  // Webhook Data
+  webhookPayload    Json?    // Raw webhook data
+  webhookSignature  String?  // For verification
+  processingStatus  String   @default("pending") // 'pending' | 'processed' | 'failed' | 'duplicate'
+  processingError   String?
+
+  // Customer Info (if available, hashed/anonymized)
+  customerEmail     String?  // Hashed email for deduplication
+  customerId        String?  // Platform's customer ID
+
+  receivedAt        DateTime @default(now())
+  processedAt       DateTime?
+
+  @@index([platform, eventType])
+  @@index([businessId, receivedAt])
+  @@index([bookingReference])
+  @@index([processingStatus])
+  @@index([affiliateClickId])
+}
+
+model CTAVariant {
+  id                String   @id @default(cuid())
+
+  // Business & Service
+  businessId        String?  // Null = platform-wide test
+  serviceType       String?  // 'accommodation' | 'tours' | null for all
+
+  // Variant Details
+  name              String   // "Green Bold Button", "Red Subtle", "Blue Animated"
+  buttonText        String   // "Book Now" | "Check Availability" | "Reserve Your Spot"
+  buttonColor       String   // Hex color code
+  buttonStyle       String   // 'solid' | 'outline' | 'ghost'
+  placement         String   // 'top' | 'bottom' | 'both'
+  size              String   @default("medium") // 'small' | 'medium' | 'large'
+
+  // A/B Test Settings
+  isActive          Boolean  @default(true)
+  trafficAllocation Float    @default(50) // Percentage of traffic (0-100)
+  startDate         DateTime @default(now())
+  endDate           DateTime?
+
+  // Performance Metrics (updated periodically)
+  impressions       Int      @default(0) // Times shown
+  clicks            Int      @default(0) // Times clicked
+  conversions       Int      @default(0) // Times resulted in booking
+  clickThroughRate  Float    @default(0) // CTR %
+  conversionRate    Float    @default(0) // CR %
+  revenue           Float    @default(0) // Total revenue generated
+  lastUpdated       DateTime @default(now())
+
+  createdAt         DateTime @default(now())
+
+  affiliateClicks   AffiliateClick[] // Clicks using this variant
+
+  @@index([businessId, isActive])
+  @@index([serviceType])
+  @@index([isActive, startDate])
 }

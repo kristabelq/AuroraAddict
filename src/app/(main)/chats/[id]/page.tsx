@@ -186,9 +186,9 @@ export default function ChatRoomPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0e17] flex flex-col">
-      {/* Chat Header */}
-      <div className="sticky top-0 bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 z-40">
+    <div className="fixed inset-0 bg-[#0a0e17] flex flex-col z-[100]">
+      {/* Chat Header - Fixed */}
+      <div className="flex-shrink-0 bg-[#1a1f2e] border-b border-white/10">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <div className="flex items-center gap-3">
             <button
@@ -240,86 +240,86 @@ export default function ChatRoomPage() {
         </div>
       </div>
 
-      {/* Pending Join Requests (for owners of private chats) */}
-      <div className="max-w-4xl mx-auto w-full px-4 pt-4">
-        <PendingJoinRequests
-          chatId={chatId}
-          isOwner={chatInfo.owner?.id === session?.user?.id}
-        />
-      </div>
-
-      {/* Messages Container */}
+      {/* Messages Container - Scrollable */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-4 max-w-4xl mx-auto w-full"
-        style={{ paddingBottom: "80px" }} // Space for input
+        className="flex-1 overflow-y-auto"
       >
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center py-12">
-            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
+        <div className="max-w-4xl mx-auto w-full px-4 py-4">
+          {/* Pending Join Requests (for owners of private chats) */}
+          <PendingJoinRequests
+            chatId={chatId}
+            isOwner={chatInfo.owner?.id === session?.user?.id}
+          />
+
+          {/* Messages */}
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center py-12">
+              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">No messages yet</h3>
+              <p className="text-gray-400">Be the first to send a message!</p>
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">No messages yet</h3>
-            <p className="text-gray-400">Be the first to send a message!</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {messages.map((message, index) => {
-              const isOwnMessage = session?.user?.id === message.user.id;
-              const showAvatar = index === 0 || messages[index - 1].user.id !== message.user.id;
+          ) : (
+            <div className="space-y-4">
+              {messages.map((message, index) => {
+                const isOwnMessage = session?.user?.id === message.user.id;
+                const showAvatar = index === 0 || messages[index - 1].user.id !== message.user.id;
 
-              return (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${isOwnMessage ? "flex-row-reverse" : ""}`}
-                >
-                  {/* Avatar */}
-                  <div className="flex-shrink-0">
-                    {showAvatar ? (
-                      getUserAvatar(message.user)
-                    ) : (
-                      <div className="w-8 h-8" /> // Spacer
-                    )}
-                  </div>
-
-                  {/* Message Content */}
-                  <div className={`flex-1 ${isOwnMessage ? "items-end" : "items-start"} flex flex-col max-w-[70%]`}>
-                    {showAvatar && (
-                      <div className={`flex items-center gap-2 mb-1 ${isOwnMessage ? "flex-row-reverse" : ""}`}>
-                        <span className="text-sm font-semibold text-white">
-                          {message.user.name}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
-                        </span>
-                      </div>
-                    )}
-
-                    <div
-                      className={`rounded-2xl px-4 py-2 ${
-                        isOwnMessage
-                          ? "bg-aurora-green text-black"
-                          : "bg-white/10 text-white"
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-                      {message.isEdited && (
-                        <span className="text-xs opacity-60 mt-1 block">(edited)</span>
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex gap-3 ${isOwnMessage ? "flex-row-reverse" : ""}`}
+                  >
+                    {/* Avatar */}
+                    <div className="flex-shrink-0">
+                      {showAvatar ? (
+                        getUserAvatar(message.user)
+                      ) : (
+                        <div className="w-8 h-8" /> // Spacer
                       )}
                     </div>
+
+                    {/* Message Content */}
+                    <div className={`flex-1 ${isOwnMessage ? "items-end" : "items-start"} flex flex-col max-w-[70%]`}>
+                      {showAvatar && (
+                        <div className={`flex items-center gap-2 mb-1 ${isOwnMessage ? "flex-row-reverse" : ""}`}>
+                          <span className="text-sm font-semibold text-white">
+                            {message.user.name}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                          </span>
+                        </div>
+                      )}
+
+                      <div
+                        className={`rounded-2xl px-4 py-2 ${
+                          isOwnMessage
+                            ? "bg-aurora-green text-black"
+                            : "bg-white/10 text-white"
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                        {message.isEdited && (
+                          <span className="text-xs opacity-60 mt-1 block">(edited)</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Message Input - Fixed at bottom */}
-      <div className="sticky bottom-0 bg-[#1a1f2e]/95 backdrop-blur-lg border-t border-white/10">
+      <div className="flex-shrink-0 bg-[#1a1f2e] border-t border-white/10">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <form onSubmit={handleSendMessage} className="flex items-end gap-2">
             <div className="flex-1">

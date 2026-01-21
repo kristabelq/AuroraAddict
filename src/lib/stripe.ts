@@ -1,12 +1,15 @@
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not defined in environment variables");
+// For intelligence-only version, allow building without real Stripe key
+const stripeKey = process.env.STRIPE_SECRET_KEY || "sk_test_placeholder";
+
+if (!process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV === "production") {
+  console.warn("⚠️  STRIPE_SECRET_KEY not configured - payment features will not work");
 }
 
 // Initialize Stripe with the secret key
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-09-30.clover",
+export const stripe = new Stripe(stripeKey, {
+  apiVersion: "2025-10-29.clover",
   typescript: true,
 });
 

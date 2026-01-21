@@ -2,8 +2,27 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+type RoomType = {
+  name: string;
+  description?: string;
+  capacity: number;
+  amenities: string[];
+};
+
+type Accommodation = {
+  businessName: string;
+  country: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+  businessServices: string[];
+  businessWebsite: string;
+  businessDescription: string;
+  roomTypes?: RoomType[];
+};
+
 // Comprehensive accommodation data with coordinates
-const accommodations = [
+const accommodations: Accommodation[] = [
   // ============================================
   // FINLAND - Rovaniemi Region
   // ============================================

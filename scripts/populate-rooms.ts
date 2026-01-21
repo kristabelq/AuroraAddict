@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { generateAffiliateLinks } from '../src/lib/affiliate-injector';
 
 const prisma = new PrismaClient();
@@ -181,16 +181,16 @@ async function main() {
   for (const room of nlvRooms) {
     // Generate affiliate links
     const affiliateLinks = generateAffiliateLinks({
-      bookingCom: room.bookingComUrl,
-      agoda: room.agodaUrl,
-      direct: room.directBookingUrl
+      bookingComUrl: room.bookingComUrl,
+      agodaUrl: room.agodaUrl,
+      directBookingUrl: room.directBookingUrl
     });
 
     const created = await prisma.roomType.create({
       data: {
         businessId: northernLightsId,
         ...room,
-        affiliateLinks,
+        affiliateLinks: affiliateLinks as Prisma.JsonObject,
         isActive: true
       }
     });
@@ -201,16 +201,16 @@ async function main() {
   for (const room of harrinivaRooms) {
     // Generate affiliate links
     const affiliateLinks = generateAffiliateLinks({
-      bookingCom: room.bookingComUrl,
-      agoda: room.agodaUrl,
-      direct: room.directBookingUrl
+      bookingComUrl: room.bookingComUrl,
+      agodaUrl: room.agodaUrl,
+      directBookingUrl: room.directBookingUrl
     });
 
     const created = await prisma.roomType.create({
       data: {
         businessId: harrinivaId,
         ...room,
-        affiliateLinks,
+        affiliateLinks: affiliateLinks as Prisma.JsonObject,
         isActive: true
       }
     });

@@ -198,7 +198,7 @@ export default function CMEAlertsPage() {
       <TimeHeader />
 
       {/* Header with Back Button */}
-      <div className="bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 sticky top-[57px] z-50">
+      <div className="bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 sticky top-[45px] z-50">
         <div className="max-w-screen-lg mx-auto p-4">
           <div className="flex items-center gap-4 mb-4">
             <button

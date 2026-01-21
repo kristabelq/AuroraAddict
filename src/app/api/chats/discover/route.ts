@@ -115,7 +115,7 @@ export async function GET(request: Request) {
     businessChats.forEach((chat) => {
       const ownerId = chat.ownerId;
 
-      if (!businessProfiles.has(ownerId)) {
+      if (!businessProfiles.has(ownerId) && chat.owner) {
         businessProfiles.set(ownerId, {
           type: 'business',
           ownerId: ownerId,

@@ -29,6 +29,49 @@ interface Sighting {
   };
 }
 
+interface RoomType {
+  id: string;
+  name: string;
+  description: string | null;
+  capacity: number;
+  priceFrom: number | null;
+  currency: string;
+  images: string[];
+  coverImage: string | null;
+  amenities: string[];
+  bookingComUrl: string | null;
+  agodaUrl: string | null;
+  directBookingUrl: string | null;
+  isActive: boolean;
+  displayOrder: number;
+  viewCount: number;
+  clickCount: number;
+}
+
+interface TourExperience {
+  id: string;
+  name: string;
+  description: string | null;
+  duration: string | null;
+  minGroupSize: number | null;
+  maxGroupSize: number | null;
+  difficulty: string | null;
+  season: string | null;
+  highlights: string[];
+  priceFrom: number | null;
+  currency: string;
+  images: string[];
+  coverImage: string | null;
+  getYourGuideUrl: string | null;
+  viatorUrl: string | null;
+  tripadvisorUrl: string | null;
+  directBookingUrl: string | null;
+  isActive: boolean;
+  displayOrder: number;
+  viewCount: number;
+  clickCount: number;
+}
+
 interface ProfileData {
   id: string;
   name: string | null;
@@ -38,6 +81,10 @@ interface ProfileData {
   instagram: string | null;
   whatsappNumber: string | null;
   publicEmail: string | null;
+  userType: string | null;
+  businessName: string | null;
+  businessServices: string[] | null;
+  verificationStatus: string | null;
   sightingsCount: number;
   postsCount: number;
   huntsCount: number;
@@ -46,6 +93,8 @@ interface ProfileData {
   followingCount: number;
   averageSuccessRate: number;
   sightings: Sighting[];
+  roomTypes: RoomType[];
+  tours: TourExperience[];
   isOwnProfile: boolean;
   isFollowing: boolean;
 }
@@ -162,6 +211,67 @@ export default function PublicProfilePage({
       }
     }
   };
+
+  // Analytics tracking functions
+  const trackRoomTypeView = async (roomTypeId: string) => {
+    try {
+      await fetch(`/api/analytics/room-types/${roomTypeId}/view`, {
+        method: "POST",
+      });
+    } catch (error) {
+      // Silently fail - analytics shouldn't block user experience
+      console.error("Error tracking room type view:", error);
+    }
+  };
+
+  const trackRoomTypeClick = async (roomTypeId: string) => {
+    try {
+      await fetch(`/api/analytics/room-types/${roomTypeId}/click`, {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Error tracking room type click:", error);
+    }
+  };
+
+  const trackTourView = async (tourId: string) => {
+    try {
+      await fetch(`/api/analytics/tours/${tourId}/view`, {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Error tracking tour view:", error);
+    }
+  };
+
+  const trackTourClick = async (tourId: string) => {
+    try {
+      await fetch(`/api/analytics/tours/${tourId}/click`, {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Error tracking tour click:", error);
+    }
+  };
+
+  // Track views when room types or tours are displayed
+  useEffect(() => {
+    if (!profile) return;
+
+    // Track room type views
+    if (profile.roomTypes && profile.roomTypes.length > 0) {
+      profile.roomTypes.forEach((roomType) => {
+        trackRoomTypeView(roomType.id);
+      });
+    }
+
+    // Track tour views
+    if (profile.tours && profile.tours.length > 0) {
+      profile.tours.forEach((tour) => {
+        trackTourView(tour.id);
+      });
+    }
+  }, [profile]);
 
   if (loading) {
     return (
@@ -281,6 +391,22 @@ export default function PublicProfilePage({
               <h2 className="text-xl font-bold text-white">
                 {profile.name || "Anonymous"}
               </h2>
+              {/* Verification Badge */}
+              {profile.userType === "business" && profile.verificationStatus === "verified" && (
+                <div
+                  className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 border border-blue-500 rounded-full"
+                  title="Verified Business"
+                >
+                  <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span className="text-xs font-medium text-blue-400">Verified</span>
+                </div>
+              )}
               {/* Social/Contact Icons */}
               <div className="flex items-center gap-2">
                 {profile.instagram && (
@@ -531,6 +657,282 @@ export default function PublicProfilePage({
             </div>
           )}
         </div>
+
+        {/* Room Types Section (for accommodation businesses) */}
+        {profile.userType === "business" &&
+         profile.businessServices?.includes("accommodation") &&
+         profile.roomTypes &&
+         profile.roomTypes.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Accommodations</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {profile.roomTypes.map((roomType) => (
+                <div
+                  key={roomType.id}
+                  className="bg-white/5 backdrop-blur-sm rounded-lg overflow-hidden hover:bg-white/10 transition-colors"
+                >
+                  {/* Room Image */}
+                  {roomType.coverImage && (
+                    <div className="relative h-48 w-full">
+                      <Image
+                        src={roomType.coverImage}
+                        alt={roomType.name}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  )}
+
+                  {/* Room Details */}
+                  <div className="p-4">
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      {roomType.name}
+                    </h3>
+
+                    {roomType.description && (
+                      <p className="text-sm text-gray-300 mb-3 line-clamp-2">
+                        {roomType.description}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-4 mb-3 text-sm text-gray-400">
+                      <div className="flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        <span>Up to {roomType.capacity} guests</span>
+                      </div>
+                      {roomType.priceFrom && (
+                        <div className="text-aurora-green font-semibold">
+                          From {roomType.currency} {roomType.priceFrom}
+                        </div>
+                      )}
+                    </div>
+
+                    {roomType.amenities && roomType.amenities.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {roomType.amenities.slice(0, 3).map((amenity) => (
+                          <span
+                            key={amenity}
+                            className="px-2 py-1 bg-white/10 rounded text-xs text-gray-300"
+                          >
+                            {amenity}
+                          </span>
+                        ))}
+                        {roomType.amenities.length > 3 && (
+                          <span className="px-2 py-1 bg-white/10 rounded text-xs text-gray-400">
+                            +{roomType.amenities.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Booking Links */}
+                    <div className="flex gap-2">
+                      {roomType.bookingComUrl && (
+                        <a
+                          href={roomType.bookingComUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackRoomTypeClick(roomType.id)}
+                          className="flex-1 px-3 py-2 bg-[#003580] hover:bg-[#00488F] text-white text-xs font-medium rounded text-center transition-colors"
+                        >
+                          Booking.com
+                        </a>
+                      )}
+                      {roomType.agodaUrl && (
+                        <a
+                          href={roomType.agodaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackRoomTypeClick(roomType.id)}
+                          className="flex-1 px-3 py-2 bg-[#D60000] hover:bg-[#E61010] text-white text-xs font-medium rounded text-center transition-colors"
+                        >
+                          Agoda
+                        </a>
+                      )}
+                      {roomType.directBookingUrl && (
+                        <a
+                          href={roomType.directBookingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackRoomTypeClick(roomType.id)}
+                          className="flex-1 px-3 py-2 bg-aurora-green hover:bg-aurora-green/80 text-black text-xs font-medium rounded text-center transition-colors"
+                        >
+                          Book Direct
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tours & Experiences Section (for tour operator businesses) */}
+        {profile.userType === "business" &&
+         profile.businessServices?.includes("tours") &&
+         profile.tours &&
+         profile.tours.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Tours & Experiences</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {profile.tours.map((tour) => (
+                <div
+                  key={tour.id}
+                  className="bg-white/5 backdrop-blur-sm rounded-lg overflow-hidden hover:bg-white/10 transition-colors"
+                >
+                  {/* Tour Image */}
+                  {tour.coverImage ? (
+                    <div className="relative h-48 w-full">
+                      <Image
+                        src={tour.coverImage}
+                        alt={tour.name}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="relative h-48 w-full bg-gradient-to-br from-aurora-blue to-aurora-purple flex items-center justify-center">
+                      <span className="text-6xl">🚌</span>
+                    </div>
+                  )}
+
+                  {/* Tour Details */}
+                  <div className="p-4">
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      {tour.name}
+                    </h3>
+
+                    {tour.description && (
+                      <p className="text-sm text-gray-300 mb-3 line-clamp-2">
+                        {tour.description}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-4 mb-3 text-sm text-gray-400 flex-wrap">
+                      {tour.duration && (
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span>{tour.duration}</span>
+                        </div>
+                      )}
+                      {(tour.minGroupSize || tour.maxGroupSize) && (
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          <span>
+                            {tour.minGroupSize && tour.maxGroupSize
+                              ? `${tour.minGroupSize}-${tour.maxGroupSize} people`
+                              : tour.minGroupSize
+                              ? `Min ${tour.minGroupSize} people`
+                              : `Max ${tour.maxGroupSize} people`}
+                          </span>
+                        </div>
+                      )}
+                      {tour.priceFrom && (
+                        <div className="text-aurora-green font-semibold">
+                          From {tour.currency} {tour.priceFrom}
+                        </div>
+                      )}
+                    </div>
+
+                    {tour.highlights && tour.highlights.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {tour.highlights.slice(0, 2).map((highlight, index) => (
+                          <span
+                            key={index}
+                            className="px-2 py-1 bg-white/10 rounded text-xs text-gray-300"
+                          >
+                            {highlight}
+                          </span>
+                        ))}
+                        {tour.highlights.length > 2 && (
+                          <span className="px-2 py-1 bg-white/10 rounded text-xs text-gray-400">
+                            +{tour.highlights.length - 2} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {(tour.difficulty || tour.season) && (
+                      <div className="flex items-center gap-3 mb-3 text-xs text-gray-400">
+                        {tour.difficulty && (
+                          <span className="px-2 py-1 bg-white/5 rounded">
+                            Difficulty: {tour.difficulty}
+                          </span>
+                        )}
+                        {tour.season && (
+                          <span className="px-2 py-1 bg-white/5 rounded">
+                            Season: {tour.season}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Booking Links */}
+                    <div className="flex gap-2 flex-wrap">
+                      {tour.getYourGuideUrl && (
+                        <a
+                          href={tour.getYourGuideUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackTourClick(tour.id)}
+                          className="flex-1 min-w-[120px] px-3 py-2 bg-[#FF6B35] hover:bg-[#FF7E4D] text-white text-xs font-medium rounded text-center transition-colors"
+                        >
+                          GetYourGuide
+                        </a>
+                      )}
+                      {tour.viatorUrl && (
+                        <a
+                          href={tour.viatorUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackTourClick(tour.id)}
+                          className="flex-1 min-w-[120px] px-3 py-2 bg-[#00A699] hover:bg-[#00B8AA] text-white text-xs font-medium rounded text-center transition-colors"
+                        >
+                          Viator
+                        </a>
+                      )}
+                      {tour.tripadvisorUrl && (
+                        <a
+                          href={tour.tripadvisorUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackTourClick(tour.id)}
+                          className="flex-1 min-w-[120px] px-3 py-2 bg-[#00AA6C] hover:bg-[#00BB7D] text-white text-xs font-medium rounded text-center transition-colors"
+                        >
+                          TripAdvisor
+                        </a>
+                      )}
+                      {tour.directBookingUrl && (
+                        <a
+                          href={tour.directBookingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackTourClick(tour.id)}
+                          className="flex-1 min-w-[120px] px-3 py-2 bg-aurora-green hover:bg-aurora-green/80 text-black text-xs font-medium rounded text-center transition-colors"
+                        >
+                          Book Direct
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Feed View Modal */}
         {showFeedView && profile && (
