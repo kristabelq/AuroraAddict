@@ -1992,7 +1992,7 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Intelligence
+                Intel
               </button>
               <button
                 onClick={() => setActiveTab("aurora-intel")}
@@ -4418,203 +4418,6 @@ export default function IntelligencePage() {
               </div>
             </div>
 
-            {/* Accommodations Link Card */}
-            <div
-              onClick={() => router.push("/accommodations")}
-              className="bg-gradient-to-r from-emerald-900/40 to-teal-900/40 backdrop-blur-lg rounded-2xl p-5 border-2 border-emerald-500/30 cursor-pointer hover:border-aurora-green/60 hover:scale-[1.01] transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-4xl">🏔️</span>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Aurora Accommodations</h3>
-                    <p className="text-sm text-gray-300 mt-1">
-                      Find glass igloos & aurora cabins with min Kp requirements & sighting rates
-                    </p>
-                  </div>
-                </div>
-                <svg className="w-6 h-6 text-aurora-green flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Space Weather Parameters Status */}
-            <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-indigo-500/30">
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                <span>📊</span>
-                <span>Current Parameters</span>
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Kp Index */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Kp Index</span>
-                    <span className="text-xs text-gray-500">Planetary K-index (0-9)</span>
-                  </div>
-                  {loadingKp ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : (
-                    <>
-                      <div className="text-4xl font-bold text-aurora-green mb-2">{parseFloat(currentKp).toFixed(2)}</div>
-                      <div className="text-xs text-gray-400">
-                        {parseFloat(currentKp) <= 2 ? "Quiet" :
-                         parseFloat(currentKp) <= 5 ? "Minor to Moderate" :
-                         parseFloat(currentKp) <= 7 ? "Strong Storm" : "Severe Storm"}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Bz Component */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Bz Component</span>
-                    <span className="text-xs text-gray-500">IMF North-South (nT)</span>
-                  </div>
-                  {loadingBz ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : currentBz !== null ? (
-                    <>
-                      <div className={`text-4xl font-bold mb-2 ${
-                        currentBz < -10 ? "text-green-400" :
-                        currentBz < 0 ? "text-yellow-400" :
-                        "text-red-400"
-                      }`}>
-                        {currentBz >= 0 ? "+" : ""}{currentBz.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {currentBz < -20 ? "🟢 Extremely Favorable" :
-                         currentBz < -10 ? "🟢 Very Favorable" :
-                         currentBz < -5 ? "🟡 Favorable" :
-                         currentBz < 5 ? "🟠 Neutral" : "🔴 Unfavorable"}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-gray-500">No data</div>
-                  )}
-                </div>
-
-                {/* Bt Total Field */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Bt (Total Field)</span>
-                    <span className="text-xs text-gray-500">Total Magnetic Field (nT)</span>
-                  </div>
-                  {loadingSolarWind ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : currentBt !== null ? (
-                    <>
-                      <div className={`text-4xl font-bold mb-2 ${
-                        currentBt > 20 ? "text-green-400" :
-                        currentBt > 10 ? "text-yellow-400" :
-                        currentBt > 5 ? "text-orange-400" : "text-gray-400"
-                      }`}>
-                        {currentBt.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {currentBt > 20 ? "Very Strong" :
-                         currentBt > 10 ? "Strong" :
-                         currentBt > 5 ? "Moderate" : "Weak"}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-gray-500">No data</div>
-                  )}
-                </div>
-
-                {/* Solar Wind Speed */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Solar Wind Speed</span>
-                    <span className="text-xs text-gray-500">km/s</span>
-                  </div>
-                  {loadingSolarWind ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : solarWindSpeed !== null ? (
-                    <>
-                      <div className={`text-4xl font-bold mb-2 ${
-                        solarWindSpeed > 700 ? "text-red-400" :
-                        solarWindSpeed > 600 ? "text-orange-400" :
-                        solarWindSpeed > 500 ? "text-yellow-400" :
-                        solarWindSpeed > 400 ? "text-green-400" : "text-gray-400"
-                      }`}>
-                        {solarWindSpeed.toFixed(0)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {solarWindSpeed > 700 ? "Extreme" :
-                         solarWindSpeed > 600 ? "Very Fast" :
-                         solarWindSpeed > 500 ? "Fast" :
-                         solarWindSpeed > 400 ? "Moderate" : "Slow"}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-gray-500">No data</div>
-                  )}
-                </div>
-
-                {/* Solar Wind Density */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Solar Wind Density</span>
-                    <span className="text-xs text-gray-500">particles/cm³</span>
-                  </div>
-                  {loadingSolarWind ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : solarWindDensity !== null ? (
-                    <>
-                      <div className={`text-4xl font-bold mb-2 ${
-                        solarWindDensity > 20 ? "text-orange-400" :
-                        solarWindDensity > 10 ? "text-yellow-400" :
-                        solarWindDensity > 5 ? "text-green-400" : "text-gray-400"
-                      }`}>
-                        {solarWindDensity.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {solarWindDensity > 20 ? "Very High" :
-                         solarWindDensity > 10 ? "High" :
-                         solarWindDensity > 5 ? "Normal" : "Low"}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-gray-500">No data</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Critical Parameter Alert */}
-              {!loadingBz && currentBz !== null && currentBz < -10 && (
-                <div className="mt-4 bg-green-500/20 border border-green-500/40 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">⚡</span>
-                    <div>
-                      <h3 className="text-lg font-bold text-green-400">Critical Factor Alert</h3>
-                      <p className="text-sm text-gray-300 mt-1">
-                        <strong>Bz component is strongly southward</strong> - This is the most critical parameter for aurora occurrence!
-                        Southward Bz enables magnetic reconnection at the magnetopause, allowing energy transfer from the solar wind into Earth's magnetosphere.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Aurora Probability Calculation */}
             <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-purple-500/30">
               <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
@@ -4853,6 +4656,203 @@ export default function IntelligencePage() {
                   </>
                 );
               })()}
+            </div>
+
+            {/* Accommodations Link Card */}
+            <div
+              onClick={() => router.push("/accommodations")}
+              className="bg-gradient-to-r from-emerald-900/40 to-teal-900/40 backdrop-blur-lg rounded-2xl p-5 border-2 border-emerald-500/30 cursor-pointer hover:border-aurora-green/60 hover:scale-[1.01] transition-all"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-4xl">🏔️</span>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Aurora Accommodations</h3>
+                    <p className="text-sm text-gray-300 mt-1">
+                      Find glass igloos & aurora cabins with min Kp requirements & sighting rates
+                    </p>
+                  </div>
+                </div>
+                <svg className="w-6 h-6 text-aurora-green flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Space Weather Parameters Status */}
+            <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-indigo-500/30">
+              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                <span>📊</span>
+                <span>Current Parameters</span>
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Kp Index */}
+                <div
+                  onClick={() => router.push("/solar-wind")}
+                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-400 font-medium">Kp Index</span>
+                    <span className="text-xs text-gray-500">Planetary K-index (0-9)</span>
+                  </div>
+                  {loadingKp ? (
+                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
+                  ) : (
+                    <>
+                      <div className="text-4xl font-bold text-aurora-green mb-2">{parseFloat(currentKp).toFixed(2)}</div>
+                      <div className="text-xs text-gray-400">
+                        {parseFloat(currentKp) <= 2 ? "Quiet" :
+                         parseFloat(currentKp) <= 5 ? "Minor to Moderate" :
+                         parseFloat(currentKp) <= 7 ? "Strong Storm" : "Severe Storm"}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Bz Component */}
+                <div
+                  onClick={() => router.push("/solar-wind")}
+                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-400 font-medium">Bz Component</span>
+                    <span className="text-xs text-gray-500">IMF North-South (nT)</span>
+                  </div>
+                  {loadingBz ? (
+                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
+                  ) : currentBz !== null ? (
+                    <>
+                      <div className={`text-4xl font-bold mb-2 ${
+                        currentBz < -10 ? "text-green-400" :
+                        currentBz < 0 ? "text-yellow-400" :
+                        "text-red-400"
+                      }`}>
+                        {currentBz >= 0 ? "+" : ""}{currentBz.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {currentBz < -20 ? "🟢 Extremely Favorable" :
+                         currentBz < -10 ? "🟢 Very Favorable" :
+                         currentBz < -5 ? "🟡 Favorable" :
+                         currentBz < 5 ? "🟠 Neutral" : "🔴 Unfavorable"}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-gray-500">No data</div>
+                  )}
+                </div>
+
+                {/* Bt Total Field */}
+                <div
+                  onClick={() => router.push("/solar-wind")}
+                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-400 font-medium">Bt (Total Field)</span>
+                    <span className="text-xs text-gray-500">Total Magnetic Field (nT)</span>
+                  </div>
+                  {loadingSolarWind ? (
+                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
+                  ) : currentBt !== null ? (
+                    <>
+                      <div className={`text-4xl font-bold mb-2 ${
+                        currentBt > 20 ? "text-green-400" :
+                        currentBt > 10 ? "text-yellow-400" :
+                        currentBt > 5 ? "text-orange-400" : "text-gray-400"
+                      }`}>
+                        {currentBt.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {currentBt > 20 ? "Very Strong" :
+                         currentBt > 10 ? "Strong" :
+                         currentBt > 5 ? "Moderate" : "Weak"}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-gray-500">No data</div>
+                  )}
+                </div>
+
+                {/* Solar Wind Speed */}
+                <div
+                  onClick={() => router.push("/solar-wind")}
+                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-400 font-medium">Solar Wind Speed</span>
+                    <span className="text-xs text-gray-500">km/s</span>
+                  </div>
+                  {loadingSolarWind ? (
+                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
+                  ) : solarWindSpeed !== null ? (
+                    <>
+                      <div className={`text-4xl font-bold mb-2 ${
+                        solarWindSpeed > 700 ? "text-red-400" :
+                        solarWindSpeed > 600 ? "text-orange-400" :
+                        solarWindSpeed > 500 ? "text-yellow-400" :
+                        solarWindSpeed > 400 ? "text-green-400" : "text-gray-400"
+                      }`}>
+                        {solarWindSpeed.toFixed(0)}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {solarWindSpeed > 700 ? "Extreme" :
+                         solarWindSpeed > 600 ? "Very Fast" :
+                         solarWindSpeed > 500 ? "Fast" :
+                         solarWindSpeed > 400 ? "Moderate" : "Slow"}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-gray-500">No data</div>
+                  )}
+                </div>
+
+                {/* Solar Wind Density */}
+                <div
+                  onClick={() => router.push("/solar-wind")}
+                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-400 font-medium">Solar Wind Density</span>
+                    <span className="text-xs text-gray-500">particles/cm³</span>
+                  </div>
+                  {loadingSolarWind ? (
+                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
+                  ) : solarWindDensity !== null ? (
+                    <>
+                      <div className={`text-4xl font-bold mb-2 ${
+                        solarWindDensity > 20 ? "text-orange-400" :
+                        solarWindDensity > 10 ? "text-yellow-400" :
+                        solarWindDensity > 5 ? "text-green-400" : "text-gray-400"
+                      }`}>
+                        {solarWindDensity.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {solarWindDensity > 20 ? "Very High" :
+                         solarWindDensity > 10 ? "High" :
+                         solarWindDensity > 5 ? "Normal" : "Low"}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-gray-500">No data</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Critical Parameter Alert */}
+              {!loadingBz && currentBz !== null && currentBz < -10 && (
+                <div className="mt-4 bg-green-500/20 border border-green-500/40 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">⚡</span>
+                    <div>
+                      <h3 className="text-lg font-bold text-green-400">Critical Factor Alert</h3>
+                      <p className="text-sm text-gray-300 mt-1">
+                        <strong>Bz component is strongly southward</strong> - This is the most critical parameter for aurora occurrence!
+                        Southward Bz enables magnetic reconnection at the magnetopause, allowing energy transfer from the solar wind into Earth's magnetosphere.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Time Lag Information */}
