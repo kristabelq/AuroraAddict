@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 export default function AboutFab() {
@@ -14,22 +15,16 @@ export default function AboutFab() {
   return (
     <Link
       href="/about"
-      className="fixed bottom-20 right-4 z-40 w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-lg border border-white/20 rounded-full flex items-center justify-center transition-all shadow-lg hover:scale-105"
-      aria-label="About AuroraAddict"
+      className="fixed bottom-20 right-4 z-40 w-11 h-11 rounded-full overflow-hidden transition-all shadow-lg hover:scale-110 ring-2 ring-white/20 hover:ring-white/40"
+      aria-label="About Aurora Intel"
     >
-      <svg
-        className="w-5 h-5 text-white"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
+      <Image
+        src="/logo.png"
+        alt="Aurora Intel"
+        width={44}
+        height={44}
+        className="w-full h-full object-cover"
+      />
     </Link>
   );
 }
