@@ -1992,7 +1992,7 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Advisor
+                Intelligence
               </button>
               <button
                 onClick={() => setActiveTab("aurora-intel")}
