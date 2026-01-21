@@ -38,13 +38,13 @@ export default function AboutPage() {
         {/* About Text */}
         <div className="bg-white/5 rounded-xl p-5 space-y-4">
           <p className="text-gray-300 leading-relaxed">
-            AuroraAddict was created by a passionate aurora hunter who wanted to build the ultimate tool
+            Aurora Intel was created by a passionate aurora hunter who wanted to build the ultimate tool
             for fellow chasers. Whether you&apos;re planning your first aurora hunt or you&apos;re a seasoned
             veteran, this app is designed to help you catch the magic of the Northern (and Southern) Lights.
           </p>
           <p className="text-gray-300 leading-relaxed">
             From real-time solar wind data to community sightings and organized hunts,
-            AuroraAddict brings everything you need into one place.
+            Aurora Intel brings everything you need into one place.
           </p>
         </div>
 
@@ -54,7 +54,7 @@ export default function AboutPage() {
 
           {/* Instagram */}
           <a
-            href="https://instagram.com/auroraaddict"
+            href="https://instagram.com/auroraintel.io"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-4 bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 rounded-xl p-4 transition-all"
@@ -66,7 +66,7 @@ export default function AboutPage() {
             </div>
             <div className="flex-1">
               <p className="text-white font-medium">Follow on Instagram</p>
-              <p className="text-gray-400 text-sm">@auroraaddict</p>
+              <p className="text-gray-400 text-sm">@auroraintel.io</p>
             </div>
             <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -75,7 +75,7 @@ export default function AboutPage() {
 
           {/* Email */}
           <a
-            href="mailto:hello@auroraaddict.com"
+            href="mailto:kristabel@auroraintel.io"
             className="flex items-center gap-4 bg-white/5 hover:bg-white/10 rounded-xl p-4 transition-all"
           >
             <div className="w-12 h-12 rounded-full bg-aurora-green/20 flex items-center justify-center">
@@ -85,29 +85,11 @@ export default function AboutPage() {
             </div>
             <div className="flex-1">
               <p className="text-white font-medium">Send an Email</p>
-              <p className="text-gray-400 text-sm">hello@auroraaddict.com</p>
+              <p className="text-gray-400 text-sm">kristabel@auroraintel.io</p>
             </div>
             <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </a>
-        </div>
-
-        {/* Support Section */}
-        <div className="bg-gradient-to-r from-aurora-green/10 to-blue-500/10 rounded-xl p-5 text-center">
-          <p className="text-gray-300 mb-3">
-            Love the app? Your support helps keep the lights on (pun intended)!
-          </p>
-          <a
-            href="https://buymeacoffee.com/auroraaddict"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-black font-semibold px-6 py-3 rounded-full transition-colors"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/>
-            </svg>
-            Buy me a coffee
           </a>
         </div>
 
