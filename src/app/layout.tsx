@@ -6,6 +6,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Aurora Intel - Your Intelligent Aurora Hunting Companion",
   description: "Professional aurora hunting platform connecting tour operators, accommodations, and aurora chasers with real-time intelligence and business insights",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({

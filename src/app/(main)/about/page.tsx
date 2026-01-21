@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
 export default function AboutPage() {
   return (
@@ -21,17 +22,16 @@ export default function AboutPage() {
       <div className="px-4 py-6 space-y-8">
         {/* App Logo/Brand */}
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-aurora-green/20 to-purple-500/20 mb-4">
-            <svg className="w-12 h-12 text-aurora-green" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4 18 Q6 14, 8 16 T12 14 T16 16 T20 18" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4" />
-              <path d="M3 14 Q5 10, 7 12 T11 10 T15 12 T19 10 T21 14" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.6" />
-              <path d="M2 10 Q4 6, 6 8 T10 6 T14 8 T18 6 T22 10" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.8" />
-              <circle cx="8" cy="5" r="1" opacity="0.9" />
-              <circle cx="12" cy="3" r="1" opacity="0.9" />
-              <circle cx="16" cy="5" r="1" opacity="0.9" />
-            </svg>
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-aurora-green/20 to-purple-500/20 mb-4 overflow-hidden">
+            <Image
+              src="/logo.png"
+              alt="Aurora Intel Logo"
+              width={80}
+              height={80}
+              className="object-contain"
+            />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">AuroraAddict</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">Aurora Intel</h2>
           <p className="text-gray-400">Your companion for chasing the Northern Lights</p>
         </div>
 
