@@ -141,7 +141,7 @@ export default function BottomNav() {
               <Link
                 key={item.path}
                 href={item.path}
-                className="flex flex-col items-center justify-center gap-1 min-w-[50px]"
+                className="flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-w-[44px] sm:min-w-[50px]"
               >
                 {item.icon(isActive)}
                 <span

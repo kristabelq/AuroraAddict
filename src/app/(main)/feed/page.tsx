@@ -769,7 +769,7 @@ export default function FeedPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
               {sightings
                 .filter((sighting) => sighting.images && sighting.images.length > 0)
                 .flatMap((sighting) =>

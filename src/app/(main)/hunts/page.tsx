@@ -713,7 +713,7 @@ export default function HuntsPage() {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <button
                           onClick={() => setHuntFilter("all")}
-                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                          className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
                             huntFilter === "all"
                               ? "bg-aurora-green text-black"
                               : "bg-white/10 text-white hover:bg-white/20"
@@ -723,7 +723,7 @@ export default function HuntsPage() {
                         </button>
                         <button
                           onClick={() => setHuntFilter("upcoming")}
-                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                          className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
                             huntFilter === "upcoming"
                               ? "bg-aurora-green text-black"
                               : "bg-white/10 text-white hover:bg-white/20"
@@ -733,7 +733,7 @@ export default function HuntsPage() {
                         </button>
                         <button
                           onClick={() => setHuntFilter("ongoing")}
-                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                          className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
                             huntFilter === "ongoing"
                               ? "bg-aurora-green text-black"
                               : "bg-white/10 text-white hover:bg-white/20"
@@ -743,7 +743,7 @@ export default function HuntsPage() {
                         </button>
                         <button
                           onClick={() => setHuntFilter("past")}
-                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                          className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
                             huntFilter === "past"
                               ? "bg-aurora-green text-black"
                               : "bg-white/10 text-white hover:bg-white/20"
@@ -804,7 +804,7 @@ export default function HuntsPage() {
                       }`}
                     >
                       {/* Cover Image - Full Width */}
-                      <div className="w-full h-48 overflow-hidden relative">
+                      <div className="w-full h-40 sm:h-48 overflow-hidden relative">
                         <img
                           src={hunt.coverImage || "/default-hunt-cover.svg"}
                           alt={hunt.name}
@@ -1250,7 +1250,7 @@ export default function HuntsPage() {
                     className="bg-white/5 rounded-xl overflow-hidden hover:bg-white/10 transition-colors cursor-pointer border border-white/5"
                   >
                     {/* Cover Image - Full Width */}
-                    <div className="w-full h-48 overflow-hidden relative">
+                    <div className="w-full h-40 sm:h-48 overflow-hidden relative">
                       <img
                         src={hunt.coverImage || "/default-hunt-cover.svg"}
                         alt={hunt.name}
