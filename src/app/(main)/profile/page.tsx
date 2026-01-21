@@ -362,10 +362,10 @@ export default function ProfilePage() {
         {/* Profile Info */}
         <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 mb-6">
           {/* Profile Image and Stats */}
-          <div className="flex items-start gap-6 mb-6">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 mb-6">
             {/* Profile Image with Handle */}
             <div className="flex flex-col items-center flex-shrink-0">
-              <div className="relative w-24 h-24 rounded-full overflow-hidden mb-2">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden mb-2">
                 {profile.image ? (
                   <Image
                     src={profile.image}
@@ -385,7 +385,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Stats Grid */}
-            <div className="flex-1 grid grid-cols-3 gap-4">
+            <div className="flex-1 grid grid-cols-3 gap-2 sm:gap-4 w-full">
               <button
                 onClick={() => {
                   document.getElementById('sightings-section')?.scrollIntoView({ behavior: 'smooth' });
@@ -568,14 +568,14 @@ export default function ProfilePage() {
 
           return (
             <div className="mb-6">
-              <div className="flex gap-4 overflow-x-auto pb-2 px-4 pt-2 scrollbar-hide">
+              <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 px-4 pt-2 scrollbar-hide">
                 {/* "All" highlight */}
                 <button
                   onClick={() => setSelectedCountry(null)}
                   className="flex flex-col items-center flex-shrink-0 group"
                 >
                   <div
-                    className={`w-20 h-20 rounded-full flex items-center justify-center overflow-hidden transition-all ${
+                    className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center overflow-hidden transition-all ${
                       selectedCountry === null
                         ? "ring-4 ring-aurora-green"
                         : "ring-2 ring-gray-600 group-hover:ring-gray-500"
@@ -598,7 +598,7 @@ export default function ProfilePage() {
                     className="flex flex-col items-center flex-shrink-0 group"
                   >
                     <div
-                      className={`w-20 h-20 rounded-full overflow-hidden transition-all ${
+                      className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden transition-all ${
                         selectedCountry === code
                           ? "ring-4 ring-aurora-green"
                           : "ring-2 ring-gray-600 group-hover:ring-gray-500"
@@ -630,7 +630,7 @@ export default function ProfilePage() {
           </h2>
 
           {profile.sightings && profile.sightings.length > 0 ? (
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
               {profile.sightings
                 .filter((sighting) => {
                   // Filter by images

@@ -609,7 +609,7 @@ export default function ChatsPage() {
                     onClick={() => router.push(`/chats/${chat.id}`)}
                     className="bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors cursor-pointer"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       {getChatIcon(chat)}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">

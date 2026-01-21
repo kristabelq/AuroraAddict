@@ -157,7 +157,7 @@ export default function ChatFilters({
                   setBusinessCategoryFilter("all");
                   setUsernameSearch("");
                 }}
-                className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                   chatTypeFilter === "all"
                     ? "bg-aurora-green text-black"
                     : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -174,7 +174,7 @@ export default function ChatFilters({
                     setBusinessCategoryFilter("all");
                     setUsernameSearch("");
                   }}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     chatTypeFilter === "hunt"
                       ? "bg-aurora-green text-black"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -189,7 +189,7 @@ export default function ChatFilters({
                   setHuntStatusFilter("all");
                   setUsernameSearch("");
                 }}
-                className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                   chatTypeFilter === "area"
                     ? "bg-aurora-green text-black"
                     : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -203,7 +203,7 @@ export default function ChatFilters({
                   setHuntStatusFilter("all");
                   setUsernameSearch("");
                 }}
-                className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                   chatTypeFilter === "business"
                     ? "bg-aurora-green text-black"
                     : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -220,7 +220,7 @@ export default function ChatFilters({
                     setCityFilter("all");
                     setBusinessCategoryFilter("all");
                   }}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     chatTypeFilter === "direct"
                       ? "bg-aurora-green text-black"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -239,7 +239,7 @@ export default function ChatFilters({
               <div className="flex gap-2 overflow-x-auto pb-2">
                 <button
                   onClick={() => setHuntStatusFilter("all")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     huntStatusFilter === "all"
                       ? "bg-aurora-green text-black"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -249,7 +249,7 @@ export default function ChatFilters({
                 </button>
                 <button
                   onClick={() => setHuntStatusFilter("upcoming")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     huntStatusFilter === "upcoming"
                       ? "bg-blue-500 text-white"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -259,7 +259,7 @@ export default function ChatFilters({
                 </button>
                 <button
                   onClick={() => setHuntStatusFilter("ongoing")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     huntStatusFilter === "ongoing"
                       ? "bg-green-500 text-white"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -269,7 +269,7 @@ export default function ChatFilters({
                 </button>
                 <button
                   onClick={() => setHuntStatusFilter("completed")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     huntStatusFilter === "completed"
                       ? "bg-gray-500 text-white"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -362,7 +362,7 @@ export default function ChatFilters({
                   <div className="flex gap-2 overflow-x-auto pb-2">
                     <button
                       onClick={() => setCityFilter("all")}
-                      className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                      className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                         cityFilter === "all"
                           ? "bg-aurora-green text-black"
                           : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -374,7 +374,7 @@ export default function ChatFilters({
                       <button
                         key={city}
                         onClick={() => setCityFilter(city)}
-                        className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                        className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                           cityFilter === city
                             ? "bg-aurora-green text-black"
                             : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -396,7 +396,7 @@ export default function ChatFilters({
               <div className="flex gap-2 overflow-x-auto pb-2">
                 <button
                   onClick={() => setBusinessCategoryFilter("all")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     businessCategoryFilter === "all"
                       ? "bg-aurora-green text-black"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -406,7 +406,7 @@ export default function ChatFilters({
                 </button>
                 <button
                   onClick={() => setBusinessCategoryFilter("accommodation")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     businessCategoryFilter === "accommodation"
                       ? "bg-aurora-green text-black"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -416,7 +416,7 @@ export default function ChatFilters({
                 </button>
                 <button
                   onClick={() => setBusinessCategoryFilter("tour_operator")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     businessCategoryFilter === "tour_operator"
                       ? "bg-aurora-green text-black"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -426,7 +426,7 @@ export default function ChatFilters({
                 </button>
                 <button
                   onClick={() => setBusinessCategoryFilter("photography")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     businessCategoryFilter === "photography"
                       ? "bg-aurora-green text-black"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -436,7 +436,7 @@ export default function ChatFilters({
                 </button>
                 <button
                   onClick={() => setBusinessCategoryFilter("restaurant")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     businessCategoryFilter === "restaurant"
                       ? "bg-aurora-green text-black"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
@@ -446,7 +446,7 @@ export default function ChatFilters({
                 </button>
                 <button
                   onClick={() => setBusinessCategoryFilter("shop")}
-                  className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1 sm:px-4 rounded-full whitespace-nowrap text-xs sm:text-sm transition-colors ${
                     businessCategoryFilter === "shop"
                       ? "bg-aurora-green text-black"
                       : "bg-white/10 text-gray-400 hover:bg-white/20"
