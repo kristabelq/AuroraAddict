@@ -5,7 +5,6 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 model Account {
@@ -40,6 +39,7 @@ model User {
   name              String?
   username          String?   @unique // Unique handle like @kristabelq
   email             String?   @unique
+  password          String?   // Hashed password for email/password authentication
   emailVerified     DateTime?
   image             String?
   bio               String?

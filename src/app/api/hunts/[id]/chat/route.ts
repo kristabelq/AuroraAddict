@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { extractCountryFromLocation } from "@/lib/countries";
 
 // GET - Get hunt chat details
 export async function GET(
@@ -101,7 +102,10 @@ export async function POST(
       );
     }
 
-    // Create chat group
+    // Extract country information from hunt location for chat filtering
+    const locationInfo = extractCountryFromLocation(hunt.location || "");
+
+    // Create chat group with location info from hunt
     const chatGroup = await prisma.chatGroup.create({
       data: {
         name: `${hunt.name} - Hunt Chat`,
@@ -111,6 +115,9 @@ export async function POST(
         huntId: huntId,
         ownerId: session.user.id,
         memberCount: 1,
+        countryCode: locationInfo.countryCode,
+        countryName: locationInfo.countryName,
+        areaName: locationInfo.areaName,
       },
     });
 

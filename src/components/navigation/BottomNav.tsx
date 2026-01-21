@@ -14,12 +14,12 @@ export default function BottomNav() {
       path: "/intelligence",
       icon: (active: boolean) => (
         <svg
-          className={`w-6 h-6 ${active ? "fill-aurora-green" : "fill-gray-400"}`}
+          className={`w-6 h-6 ${active ? "stroke-aurora-green fill-aurora-green" : "stroke-gray-400 fill-gray-400"}`}
           viewBox="0 0 24 24"
         >
-          <path d="M4 18 Q6 14, 8 16 T12 14 T16 16 T20 18" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4" />
-          <path d="M3 14 Q5 10, 7 12 T11 10 T15 12 T19 10 T21 14" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.6" />
-          <path d="M2 10 Q4 6, 6 8 T10 6 T14 8 T18 6 T22 10" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.8" />
+          <path d="M4 18 Q6 14, 8 16 T12 14 T16 16 T20 18" fill="none" strokeWidth="2" opacity="0.4" />
+          <path d="M3 14 Q5 10, 7 12 T11 10 T15 12 T19 10 T21 14" fill="none" strokeWidth="2" opacity="0.6" />
+          <path d="M2 10 Q4 6, 6 8 T10 6 T14 8 T18 6 T22 10" fill="none" strokeWidth="2" opacity="0.8" />
           <circle cx="8" cy="5" r="1" opacity="0.9" />
           <circle cx="12" cy="3" r="1" opacity="0.9" />
           <circle cx="16" cy="5" r="1" opacity="0.9" />

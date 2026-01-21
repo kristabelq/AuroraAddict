@@ -436,7 +436,7 @@ export default function HuntsPage() {
       <TimeHeader />
 
       {/* Tab Navigation - Outside of max-width container for proper sticky behavior */}
-      <div className="sticky top-[57px] bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 z-40">
+      <div className="sticky top-[45px] bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 z-40">
         <div className="max-w-2xl mx-auto">
           <div className="p-4">
             {/* Tab Navigation */}
@@ -942,7 +942,7 @@ export default function HuntsPage() {
                               {hunt.capacity
                                 ? `${hunt.participants} / ${hunt.capacity} ${hunt.participants === 1 ? "participant" : "participants"}`
                                 : `${hunt.participants} ${hunt.participants === 1 ? "participant" : "participants"}`}
-                              {hunt.waitlistCount && hunt.waitlistCount > 0 && (
+                              {(hunt.waitlistCount ?? 0) > 0 && (
                                 <>, {hunt.waitlistCount} on waitlist</>
                               )}
                             </span>
@@ -1379,7 +1379,7 @@ export default function HuntsPage() {
                             {hunt.capacity
                               ? `${hunt.participants} / ${hunt.capacity} ${hunt.participants === 1 ? "participant" : "participants"}`
                               : `${hunt.participants} ${hunt.participants === 1 ? "participant" : "participants"}`}
-                            {hunt.waitlistCount && hunt.waitlistCount > 0 && (
+                            {(hunt.waitlistCount ?? 0) > 0 && (
                               <>, {hunt.waitlistCount} on waitlist</>
                             )}
                           </span>

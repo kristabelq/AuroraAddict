@@ -1980,9 +1980,9 @@ export default function IntelligencePage() {
       <TimeHeader />
 
       {/* Tab Navigation - Outside of max-width container for proper sticky behavior */}
-      <div className="sticky top-[60px] bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 z-[9998] min-h-[70px]">
+      <div className="sticky top-[45px] bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 z-[9998]">
         <div className="max-w-screen-lg mx-auto">
-          <div className="p-4">
+          <div className="px-4 py-2">
             <div className="flex gap-2">
               <button
                 onClick={() => setActiveTab("expert")}
@@ -1992,7 +1992,7 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Addict's Intel
+                Advisor
               </button>
               <button
                 onClick={() => setActiveTab("aurora-intel")}
@@ -2002,7 +2002,7 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Aurora Intel
+                Aurora
               </button>
               <button
                 onClick={() => setActiveTab("cosmic")}
@@ -2012,7 +2012,7 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Cosmic Intel
+                Cosmic
               </button>
               <button
                 onClick={() => setActiveTab("cloud")}
@@ -2022,7 +2022,7 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Cloud Intel
+                Cloud
               </button>
               <button
                 onClick={() => setActiveTab("map")}
@@ -2032,7 +2032,7 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Map Intel
+                Map
               </button>
             </div>
           </div>
@@ -2857,10 +2857,10 @@ export default function IntelligencePage() {
       {activeTab === "expert" && (
         <div className="max-w-screen-lg mx-auto p-4">
           <div className="space-y-6">
-            {/* Aurora A.I. Advisor - Real-time Decision System */}
+            {/* Aurora Intelligence - Real-time Decision System */}
             <div className="space-y-4">
               <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-3xl font-bold text-white">Aurora A.I. Advisor</h2>
+                <h2 className="text-3xl font-bold text-white">Aurora Intelligence</h2>
               </div>
 
               {/* Three Gates - Vertical Stack */}

@@ -281,7 +281,7 @@ export default function SolarFlaresPage() {
       <TimeHeader />
 
       {/* Header with Back Button */}
-      <div className="bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 sticky top-[57px] z-50">
+      <div className="bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 sticky top-[45px] z-50">
         <div className="max-w-screen-lg mx-auto p-4">
           <div className="flex items-center gap-4 mb-4">
             <button
@@ -396,7 +396,7 @@ export default function SolarFlaresPage() {
                       <Tooltip
                         contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '8px' }}
                         labelStyle={{ color: '#fff' }}
-                        formatter={(value: any, name: string, props: any) => [
+                        formatter={(value: any, name: string | undefined, props: any) => [
                           `${props.payload.class}${props.payload.intensity?.toFixed(1)} (${value.toExponential(2)} W/m²)`,
                           'X-Ray Flux'
                         ]}

@@ -9,7 +9,7 @@ if (!process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV === "production") {
 
 // Initialize Stripe with the secret key
 export const stripe = new Stripe(stripeKey, {
-  apiVersion: "2025-09-30.clover",
+  apiVersion: "2025-10-29.clover",
   typescript: true,
 });
 

@@ -376,7 +376,7 @@ export default function ChatSettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="sticky top-[57px] bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 z-30">
+      <div className="sticky top-[45px] bg-[#1a1f2e]/95 backdrop-blur-lg border-b border-white/10 z-30">
         <div className="max-w-4xl mx-auto px-4">
           <div className="flex gap-1">
             {chatInfo.requireApproval && (

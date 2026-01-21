@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { COUNTRIES as BASE_COUNTRIES } from "@/lib/countries";
 
 interface ChatFiltersProps {
   // Context
@@ -19,8 +20,8 @@ interface ChatFiltersProps {
   setHuntStatusFilter: (value: "all" | "upcoming" | "ongoing" | "completed") => void;
 
   // Location filters
-  countryFilter: "all" | "FI" | "NO" | "SE";
-  setCountryFilter: (value: "all" | "FI" | "NO" | "SE") => void;
+  countryFilter: string;
+  setCountryFilter: (value: string) => void;
   cityFilter: string;
   setCityFilter: (value: string) => void;
 
@@ -37,6 +38,12 @@ interface ChatFiltersProps {
   clearAllFilters: () => void;
   hasActiveFilters: () => boolean;
 }
+
+// Add "All Countries" option to the imported countries list
+const COUNTRIES = [
+  { code: "all", flag: "", name: "All Countries" },
+  ...BASE_COUNTRIES,
+];
 
 export default function ChatFilters({
   context = "myChats", // Default to myChats for backward compatibility
@@ -59,6 +66,33 @@ export default function ChatFilters({
   hasActiveFilters,
 }: ChatFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
+  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
+  const countryDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(event.target as Node)) {
+        setCountryDropdownOpen(false);
+        setCountrySearch("");
+      }
+    };
+
+    if (countryDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [countryDropdownOpen]);
+
+  const filteredCountries = COUNTRIES.filter(country =>
+    country.name.toLowerCase().includes(countrySearch.toLowerCase())
+  );
+
+  const selectedCountry = COUNTRIES.find(c => c.code === countryFilter) || COUNTRIES[0];
 
   const availableCities = countryFilter !== "all" ? getCitiesForCountry(countryFilter) : [];
 
@@ -250,62 +284,74 @@ export default function ChatFilters({
           {/* Location Filters - For Area Chats */}
           {(chatTypeFilter === "all" || chatTypeFilter === "area") && (
             <>
-              {/* Country Filter */}
+              {/* Country Filter - Searchable Dropdown */}
               <div>
                 <label className="block text-white text-sm font-medium mb-2">Country</label>
-                <div className="flex gap-2 overflow-x-auto pb-2">
+                <div className="relative" ref={countryDropdownRef}>
                   <button
-                    onClick={() => {
-                      setCountryFilter("all");
-                      setCityFilter("all");
-                    }}
-                    className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
-                      countryFilter === "all"
-                        ? "bg-aurora-green text-black"
-                        : "bg-white/10 text-gray-400 hover:bg-white/20"
-                    }`}
+                    onClick={() => setCountryDropdownOpen(!countryDropdownOpen)}
+                    className="w-full bg-white/10 border border-gray-600 rounded-lg px-4 py-2 text-white text-left flex items-center justify-between hover:border-aurora-green transition-colors"
                   >
-                    All
+                    <span>
+                      {selectedCountry.flag} {selectedCountry.name}
+                    </span>
+                    <svg
+                      className={`w-5 h-5 text-gray-400 transition-transform ${countryDropdownOpen ? "rotate-180" : ""}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </button>
-                  <button
-                    onClick={() => {
-                      setCountryFilter("FI");
-                      setCityFilter("all");
-                    }}
-                    className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
-                      countryFilter === "FI"
-                        ? "bg-aurora-green text-black"
-                        : "bg-white/10 text-gray-400 hover:bg-white/20"
-                    }`}
-                  >
-                    🇫🇮 Finland
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCountryFilter("NO");
-                      setCityFilter("all");
-                    }}
-                    className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
-                      countryFilter === "NO"
-                        ? "bg-aurora-green text-black"
-                        : "bg-white/10 text-gray-400 hover:bg-white/20"
-                    }`}
-                  >
-                    🇳🇴 Norway
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCountryFilter("SE");
-                      setCityFilter("all");
-                    }}
-                    className={`px-4 py-1 rounded-full whitespace-nowrap transition-colors ${
-                      countryFilter === "SE"
-                        ? "bg-aurora-green text-black"
-                        : "bg-white/10 text-gray-400 hover:bg-white/20"
-                    }`}
-                  >
-                    🇸🇪 Sweden
-                  </button>
+
+                  {countryDropdownOpen && (
+                    <div className="absolute z-50 mt-1 w-full bg-[#1a1f2e] border border-gray-600 rounded-lg shadow-lg max-h-64 overflow-hidden">
+                      {/* Search Input */}
+                      <div className="p-2 border-b border-gray-600">
+                        <input
+                          type="text"
+                          value={countrySearch}
+                          onChange={(e) => setCountrySearch(e.target.value)}
+                          placeholder="Search countries..."
+                          className="w-full bg-white/10 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-aurora-green"
+                          autoFocus
+                        />
+                      </div>
+
+                      {/* Country List */}
+                      <div className="overflow-y-auto max-h-48">
+                        {filteredCountries.length === 0 ? (
+                          <div className="px-4 py-3 text-gray-500 text-sm">No countries found</div>
+                        ) : (
+                          filteredCountries.map((country) => (
+                            <button
+                              key={country.code}
+                              onClick={() => {
+                                setCountryFilter(country.code);
+                                setCityFilter("all");
+                                setCountryDropdownOpen(false);
+                                setCountrySearch("");
+                              }}
+                              className={`w-full px-4 py-2 text-left hover:bg-white/10 transition-colors flex items-center gap-2 ${
+                                countryFilter === country.code
+                                  ? "bg-aurora-green/20 text-aurora-green"
+                                  : "text-white"
+                              }`}
+                            >
+                              <span>{country.flag}</span>
+                              <span>{country.name}</span>
+                              {countryFilter === country.code && (
+                                <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
