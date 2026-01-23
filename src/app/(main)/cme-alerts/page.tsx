@@ -90,11 +90,11 @@ export default function CMEAlertsPage() {
   };
 
   const getSpeedColor = (speed?: number) => {
+    // Traffic light system: Green = Good for aurora (fast), Yellow = Moderate, Red = Poor (slow)
     if (!speed) return "#666666";
-    if (speed >= 1000) return "#ff0000";
-    if (speed >= 700) return "#ffaa00";
-    if (speed >= 500) return "#ffff00";
-    return "#00ff00";
+    if (speed >= 500) return "#22c55e"; // Green - good for aurora
+    if (speed >= 400) return "#eab308"; // Yellow - moderate
+    return "#ef4444"; // Red - poor for aurora
   };
 
   const getSpeedCategory = (speed?: number): string => {
@@ -213,7 +213,7 @@ export default function CMEAlertsPage() {
                   d="M15 19l-7-7 7-7"
                 />
               </svg>
-              <span className="font-medium">Back to Cosmic Intel</span>
+              <span className="font-medium">Back to Aurora Forecast</span>
             </button>
           </div>
           <div className="flex items-center justify-between">
@@ -278,10 +278,7 @@ export default function CMEAlertsPage() {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <div
-                                className="text-2xl font-bold"
-                                style={{ color: getSpeedColor(speed) }}
-                              >
+                              <div className="text-2xl font-bold text-white">
                                 {cmeType}
                               </div>
                               {speed >= 700 && (
@@ -348,7 +345,7 @@ export default function CMEAlertsPage() {
 
                           <div>
                             <div className="text-xs text-gray-500 mb-1">Visible To</div>
-                            <div className="text-xl font-bold text-green-400">{getAuroraLatitude(speed)}</div>
+                            <div className="text-xl font-bold text-white">{getAuroraLatitude(speed)}</div>
                           </div>
                         </div>
 

@@ -1,7 +1,7 @@
 /**
- * Aurora Verdict System - Refactored with Geomagnetic Coordinates
- * Separates aurora intensity (physical property) from visibility probability (location-dependent)
- * Uses IGRF-based geomagnetic coordinates for accurate visibility predictions
+ * Aurora Verdict System - Permutation-Based Probability Calculation
+ * Uses 3,125 pre-calculated permutations for scientifically-validated predictions
+ * Combines permutation lookup with geomagnetic coordinate calculations
  */
 
 import {
@@ -10,6 +10,8 @@ import {
   calculateAuroraVisibility,
   REFERENCE_CITIES,
 } from "./geomagneticCoordinates";
+
+import { lookupPermutation, AuroraPermutation } from "./auroraPermutations";
 
 export interface AuroraVerdict {
   // Aurora Physical Properties
@@ -63,22 +65,21 @@ function classifyKp(kp: number): string {
 }
 
 function classifyBz(bz: number): string {
-  if (bz > 10) return "Strong Northward";
-  if (bz > 5) return "Moderate Northward";
+  // 5 levels matching permutation table
+  if (bz > 5) return "Strong Northward";
   if (bz > 0) return "Weak Northward";
   if (bz >= -5) return "Weak Southward";
   if (bz >= -10) return "Moderate Southward";
-  if (bz >= -20) return "Strong Southward";
-  return "Extreme Southward";
+  return "Strong Southward"; // Bz < -10
 }
 
 function classifyBt(bt: number): string {
+  // 5 levels matching permutation table
   if (bt < 5) return "Very Weak";
   if (bt < 10) return "Weak";
   if (bt < 15) return "Moderate";
-  if (bt < 20) return "Strong";
-  if (bt < 30) return "Very Strong";
-  return "Extreme";
+  if (bt < 25) return "Strong";
+  return "Very Strong"; // Bt >= 25
 }
 
 function classifySpeed(speed: number): string {
@@ -99,7 +100,7 @@ function classifyDensity(density: number): string {
 
 /**
  * Calculate aurora verdict based on current space weather parameters
- * Separates intensity from visibility - scientifically accurate approach
+ * Uses 3,125 pre-calculated permutations for scientifically-accurate predictions
  */
 export function calculateAuroraVerdict(
   kp: number,
@@ -108,74 +109,21 @@ export function calculateAuroraVerdict(
   speed: number,
   density: number
 ): AuroraVerdict {
-  // Classify parameters
+  // STEP 1: Classify parameters into levels
   const kpLevel = classifyKp(kp);
   const bzLevel = classifyBz(bz);
   const btLevel = classifyBt(bt);
   const speedLevel = classifySpeed(speed);
   const densityLevel = classifyDensity(density);
 
-  // STEP 1: Calculate Aurora Intensity Score (0-100)
-  // This represents the PHYSICAL STRENGTH of the aurora, not visibility probability
-  let intensityScore = 0;
+  // STEP 2: Look up the permutation from the pre-calculated table
+  const permutation = lookupPermutation(kpLevel, bzLevel, btLevel, speedLevel, densityLevel);
 
-  // Kp contribution (0-30 points) - Geomagnetic activity level
-  if (kp >= 8) intensityScore += 30;
-  else if (kp >= 6) intensityScore += 25;
-  else if (kp >= 5) intensityScore += 20;
-  else if (kp >= 4) intensityScore += 15;
-  else if (kp >= 3) intensityScore += 10;
-  else intensityScore += 5;
-
-  // Bz contribution (0-40 points) - MOST IMPORTANT for reconnection
-  if (bz < -20) intensityScore += 40;
-  else if (bz < -10) intensityScore += 35;
-  else if (bz < -5) intensityScore += 25;
-  else if (bz < 0) intensityScore += 15;
-  else if (bz < 5) intensityScore += 5;
-  else intensityScore = Math.max(0, intensityScore - 20); // Northward Bz suppresses activity
-
-  // Speed contribution (0-15 points) - Solar wind ram pressure
-  if (speed > 800) intensityScore += 15;
-  else if (speed > 650) intensityScore += 12;
-  else if (speed > 500) intensityScore += 8;
-  else if (speed > 400) intensityScore += 5;
-  else intensityScore += 2;
-
-  // Bt contribution (0-10 points) - Total magnetic field strength
-  if (bt > 20) intensityScore += 10;
-  else if (bt > 15) intensityScore += 8;
-  else if (bt > 10) intensityScore += 6;
-  else if (bt > 5) intensityScore += 4;
-  else intensityScore += 2;
-
-  // Density contribution (0-5 points) - Dynamic pressure
-  if (density > 25) intensityScore += 5;
-  else if (density > 15) intensityScore += 4;
-  else if (density > 7) intensityScore += 3;
-  else intensityScore += 1;
-
-  // Cap at 100
-  intensityScore = Math.min(100, intensityScore);
-
-  // STEP 2: Calculate Auroral Oval Position using Geomagnetic Coordinates
+  // STEP 3: Calculate Auroral Oval Position using Geomagnetic Coordinates
   const ovalPosition = getAuroralOvalLatitude(kp);
 
-  // Map Intensity Score to Aurora Strength Category
-  let strengthCategory = "";
-  let strengthEmoji = "";
-  let minGeomagneticLat = ovalPosition.equatorwardEdge;
-  let visibilityRange = "";
-  let alertLevel = "";
-  let auroraType = "";
-  let auroraColors = "";
-  let auroraStructure = "";
-  let durationHours = "";
-  let certainty = 100; // How certain we are (reduced if conditions are unusual)
-  let exampleCities: string[] = [];
-
-  // Determine which reference cities can see aurora based on geomagnetic coordinates
-  exampleCities = REFERENCE_CITIES.filter((city) => {
+  // STEP 4: Determine which reference cities can see aurora
+  const exampleCities = REFERENCE_CITIES.filter((city) => {
     const { geomagneticLat } = toGeomagneticCoordinates(
       city.geographicLat,
       city.geographicLon
@@ -183,167 +131,38 @@ export function calculateAuroraVerdict(
     const visibility = calculateAuroraVisibility(geomagneticLat, kp);
     return visibility.isVisible && visibility.quality !== "none";
   })
-    .slice(0, 5) // Show up to 5 example cities
+    .slice(0, 5)
     .map((city) => city.name);
 
-  // Determine strength category based on intensity
-  if (intensityScore >= 90) {
-    // EXTREME: Auroral oval reaches mid-latitudes
-    strengthCategory = "EXTREME AURORA";
-    strengthEmoji = "🔴";
-    alertLevel = "ALERT: Major Event";
-    auroraType = "Extreme";
-    auroraColors = "All colors: green, red, purple, blue, pink";
-    auroraStructure = "Full-sky corona, rapid pulsations, multiple curtains";
-    durationHours = "6-18";
-    visibilityRange = `Auroral oval at ${ovalPosition.equatorwardEdge.toFixed(0)}° geomag latitude (visible from major cities)`;
-  } else if (intensityScore >= 75) {
-    // MAJOR: Strong auroral activity
-    strengthCategory = "MAJOR AURORA";
-    strengthEmoji = "🟠";
-    alertLevel = "ALERT: Significant Event";
-    auroraType = "Major";
-    auroraColors = "Intense green (557.7 nm), red borders (630 nm), purple edges (427.8 nm)";
-    auroraStructure = "Dynamic curtains, possible corona, multiple arcs";
-    durationHours = "5-8";
-    visibilityRange = `Auroral oval at ${ovalPosition.equatorwardEdge.toFixed(0)}° geomag latitude`;
-  } else if (intensityScore >= 60) {
-    // STRONG: Good auroral activity
-    strengthCategory = "STRONG AURORA";
-    strengthEmoji = "🟡";
-    alertLevel = "WATCH: Good Conditions";
-    auroraType = "Strong";
-    auroraColors = "Bright green dominant, red upper borders possible";
-    auroraStructure = "Multiple arcs, curtains with rayed structure";
-    durationHours = "3-6";
-    visibilityRange = `Auroral oval at ${ovalPosition.equatorwardEdge.toFixed(0)}° geomag latitude`;
-  } else if (intensityScore >= 45) {
-    // MODERATE: Moderate auroral activity
-    strengthCategory = "MODERATE AURORA";
-    strengthEmoji = "🟢";
-    alertLevel = "WATCH: Possible Activity";
-    auroraType = "Moderate";
-    auroraColors = "Bright green, occasional red at high altitudes";
-    auroraStructure = "Clear arcs, some curtain structure";
-    durationHours = "2-4";
-    visibilityRange = `Auroral oval at ${ovalPosition.equatorwardEdge.toFixed(0)}° geomag latitude`;
-  } else if (intensityScore >= 30) {
-    // MINOR: Minor auroral activity
-    strengthCategory = "MINOR AURORA";
-    strengthEmoji = "🔵";
-    alertLevel = "MONITOR: Weak Activity";
-    auroraType = "Minor";
-    auroraColors = "Green dominant, faint yellow-green";
-    auroraStructure = "Faint arcs, diffuse patches";
-    durationHours = "1-2";
-    visibilityRange = `Auroral oval at ${ovalPosition.equatorwardEdge.toFixed(0)}° geomag latitude`;
-  } else if (intensityScore >= 15) {
-    // WEAK: Weak auroral activity
-    strengthCategory = "WEAK AURORA";
-    strengthEmoji = "⚪";
-    alertLevel = "STANDBY: Minimal Activity";
-    auroraType = "Weak";
-    auroraColors = "Faint green, whitish to naked eye";
-    auroraStructure = "Diffuse glow, faint arcs near horizon";
-    durationHours = "0.5-1";
-    visibilityRange = `Auroral oval at ${ovalPosition.equatorwardEdge.toFixed(0)}° geomag latitude`;
-  } else {
-    // NO AURORA: No significant activity
-    strengthCategory = "NO AURORA";
-    strengthEmoji = "⚫";
-    alertLevel = "QUIET: No Activity";
-    auroraType = "None";
-    auroraColors = "";
-    auroraStructure = "";
-    durationHours = "0";
-    visibilityRange = "No auroral activity";
-    exampleCities = [];
+  // STEP 5: Extract data from permutation or use defaults
+  if (!permutation) {
+    // Fallback if permutation not found (shouldn't happen with valid data)
+    console.warn(`Permutation not found for: ${kpLevel}|${bzLevel}|${btLevel}|${speedLevel}|${densityLevel}`);
+    return createDefaultVerdict(ovalPosition, exampleCities);
   }
 
-  // STEP 3: Physics Validation
-  let physicsFlag = "✅ PHYSICALLY VALID";
-  let physicsNotes = "Normal conditions";
+  // Map probability to intensity score (0-100)
+  const intensityScore = Math.round(permutation.probability);
 
-  // Check for impossible combinations
-  if (kp >= 8 && bz > 0) {
-    physicsFlag = "⛔ PHYSICALLY IMPOSSIBLE";
-    physicsNotes = "Severe storm cannot occur with northward Bz (no energy input)";
-    certainty = 0;
-    intensityScore = 0;
-    strengthCategory = "NO AURORA";
-    strengthEmoji = "⚫";
-    minGeomagneticLat = 70;
-    visibilityRange = "Invalid conditions - check data quality";
-    exampleCities = [];
-  } else if (kp >= 8 && speed < 400 && density < 3) {
-    physicsFlag = "⛔ PHYSICALLY IMPOSSIBLE";
-    physicsNotes = "Severe storm requires energetic solar wind driver";
-    certainty = 0;
-    intensityScore = 0;
-    strengthCategory = "NO AURORA";
-    strengthEmoji = "⚫";
-    minGeomagneticLat = 70;
-    visibilityRange = "Invalid conditions - check data quality";
-    exampleCities = [];
-  } else if (kp >= 6 && bz > 10 && speed < 500) {
-    physicsFlag = "⚠️ HIGHLY UNLIKELY";
-    physicsNotes = "Strong storm with northward Bz is very rare";
-    certainty = 30;
-  } else if (speed > 800 && density < 3) {
-    physicsFlag = "⚠️ RARE BUT POSSIBLE";
-    physicsNotes = "UNUSUAL: Rarefied high-speed stream (coronal hole)";
-    certainty = 75;
-  } else if (speed < 400 && density > 25) {
-    physicsFlag = "⚠️ RARE BUT POSSIBLE";
-    physicsNotes = "UNUSUAL: High density with slow speed (compression region)";
-    certainty = 75;
-  } else if (kp < 4 && bz < -10 && speed > 600) {
-    physicsFlag = "⚠️ TIMING-DEPENDENT";
-    physicsNotes = "Kp lag: Storm onset, Kp hasn't risen yet. Conditions may rapidly improve!";
-    certainty = 90;
-  } else if (kp >= 7 && bz > 0) {
-    physicsFlag = "⚠️ TIMING-DEPENDENT";
-    physicsNotes = "Kp persistence: Storm ending, Bz turned northward. Activity declining.";
-    certainty = 85;
-  }
+  // Extract strength category and emoji from verdict category
+  const { strengthCategory, strengthEmoji } = parseVerdictCategory(permutation.verdictCategory);
 
-  // Certainty description
-  let likelihood = "";
-  if (certainty >= 95) likelihood = "Very certain";
-  else if (certainty >= 85) likelihood = "Highly confident";
-  else if (certainty >= 70) likelihood = "Confident";
-  else if (certainty >= 50) likelihood = "Moderately confident";
-  else if (certainty >= 30) likelihood = "Low confidence";
-  else likelihood = "Very low confidence";
+  // Parse latitude reach from permutation
+  const minGeomagneticLat = parseLatitudeReach(permutation.latitudeReach, ovalPosition.equatorwardEdge);
 
-  // STEP 4: Generate Viewing Tips based on Intensity & Location
-  let viewingTip = "";
-  if (intensityScore >= 90) {
-    viewingTip = "ONCE-IN-A-LIFETIME EVENT! Visible from major cities. Drop everything and go NOW!";
-  } else if (intensityScore >= 75) {
-    viewingTip = "Major aurora event! Visible from mid-latitudes. Head to dark location immediately.";
-  } else if (intensityScore >= 60) {
-    viewingTip = "Strong aurora! Excellent viewing from northern Europe/North America. Plan your trip now.";
-  } else if (intensityScore >= 45) {
-    viewingTip = "Moderate aurora activity. Good viewing from Scotland, Scandinavia, Alaska, Canada.";
-  } else if (intensityScore >= 30) {
-    viewingTip = "Minor aurora. Visible from Iceland, Northern Scandinavia, Northern Canada. Worth checking if you're there.";
-  } else if (intensityScore >= 15) {
-    viewingTip = "Weak aurora. Only visible from Arctic locations (Tromsø, Reykjavik). May be faint.";
-  } else if (bz > 0) {
-    viewingTip = "Northward Bz blocking - wait for Bz to turn southward";
-  } else if (speed < 400 && kp < 3) {
-    viewingTip = "Slow, quiet solar wind - very low energy. Check back later.";
-  } else {
-    viewingTip = "Conditions not favorable - only polar cusp aurora possible at extreme latitudes.";
-  }
+  // Determine certainty based on physics flag
+  const certainty = parseCertainty(permutation.physicsFlag, permutation.physicsNotes, kp, bz, speed);
 
-  // Special case: Theta Aurora (northward IMF aurora)
-  if (bz > 10 && kp <= 2) {
-    viewingTip = "Possible Theta Aurora (rare polar cap aurora, >75° latitude only)";
-  }
+  // Generate visibility range description
+  const visibilityRange = intensityScore > 10
+    ? `Auroral oval at ${ovalPosition.equatorwardEdge.toFixed(0)}° geomag latitude`
+    : "No auroral activity";
 
-  // Add Kp lag warnings to viewing tip
+  // Determine likelihood description
+  const likelihood = permutation.likelihood || determineLikelihood(certainty);
+
+  // Add dynamic warnings to viewing tip
+  let viewingTip = permutation.viewingTip || "";
   if (kp < 4 && bz < -10 && speed > 600) {
     viewingTip += " ⚠️ NOTE: Kp index lagging - activity may intensify soon!";
   } else if (kp >= 7 && bz > 0) {
@@ -351,7 +170,7 @@ export function calculateAuroraVerdict(
   }
 
   return {
-    // Aurora Physical Properties
+    // Aurora Physical Properties (from permutation)
     intensityScore,
     strengthCategory,
     strengthEmoji,
@@ -359,33 +178,136 @@ export function calculateAuroraVerdict(
     // Visibility Information (Geomagnetic-based)
     minGeomagneticLat,
     visibilityRange,
-    exampleCities,
+    exampleCities: intensityScore > 10 ? exampleCities : [],
     certainty,
 
     // Auroral Oval Information
     ovalPosition,
 
-    // Physics validation
-    physicsFlag,
-    physicsNotes,
+    // Physics validation (from permutation)
+    physicsFlag: permutation.physicsFlag,
+    physicsNotes: permutation.physicsNotes,
 
-    // User guidance
-    alertLevel,
+    // User guidance (from permutation)
+    alertLevel: permutation.alertLevel,
     viewingTip,
 
-    // Aurora characteristics
-    auroraType,
-    auroraColors,
-    auroraStructure,
-    durationHours,
+    // Aurora characteristics (from permutation)
+    auroraType: permutation.auroraType,
+    auroraColors: permutation.auroraColors,
+    auroraStructure: permutation.auroraStructure,
+    durationHours: permutation.durationHours,
 
     // Legacy fields (for backward compatibility)
-    probability: intensityScore, // Now represents intensity, not visibility
+    probability: intensityScore,
     verdictCategory: strengthCategory,
     verdictEmoji: strengthEmoji,
     likelihood,
     latitudeReach: visibilityRange,
-    minLatitude: minGeomagneticLat, // Deprecated - now represents geomagnetic latitude
+    minLatitude: minGeomagneticLat,
+  };
+}
+
+/**
+ * Parse verdict category string to extract strength category and emoji
+ */
+function parseVerdictCategory(verdictCategory: string): { strengthCategory: string; strengthEmoji: string } {
+  if (verdictCategory.includes("EXTREME")) {
+    return { strengthCategory: "EXTREME AURORA", strengthEmoji: "🔴" };
+  } else if (verdictCategory.includes("MAJOR")) {
+    return { strengthCategory: "MAJOR AURORA", strengthEmoji: "🟠" };
+  } else if (verdictCategory.includes("STRONG")) {
+    return { strengthCategory: "STRONG AURORA", strengthEmoji: "🟡" };
+  } else if (verdictCategory.includes("MODERATE")) {
+    return { strengthCategory: "MODERATE AURORA", strengthEmoji: "🟢" };
+  } else if (verdictCategory.includes("MINOR")) {
+    return { strengthCategory: "MINOR AURORA", strengthEmoji: "🔵" };
+  } else if (verdictCategory.includes("WEAK")) {
+    return { strengthCategory: "WEAK AURORA", strengthEmoji: "⚪" };
+  } else {
+    return { strengthCategory: "NO AURORA", strengthEmoji: "⚫" };
+  }
+}
+
+/**
+ * Parse latitude reach string to extract numeric value
+ */
+function parseLatitudeReach(latitudeReach: string, defaultLat: number): number {
+  if (!latitudeReach) return defaultLat;
+
+  // Parse formats like "<40°", "45-50°", ">70°", "40-45° (rare)"
+  const match = latitudeReach.match(/<?(\d+)/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return defaultLat;
+}
+
+/**
+ * Determine certainty based on physics validation
+ */
+function parseCertainty(physicsFlag: string, physicsNotes: string, kp: number, bz: number, speed: number): number {
+  if (physicsFlag.includes("IMPOSSIBLE")) {
+    return 0;
+  } else if (physicsFlag.includes("HIGHLY UNLIKELY")) {
+    return 30;
+  } else if (physicsFlag.includes("RARE BUT POSSIBLE")) {
+    return 75;
+  } else if (physicsFlag.includes("TIMING-DEPENDENT")) {
+    // Check specific timing conditions
+    if (kp < 4 && bz < -10 && speed > 600) {
+      return 90; // Storm onset, Kp lagging
+    } else if (kp >= 7 && bz > 0) {
+      return 85; // Storm ending
+    }
+    return 85;
+  }
+  return 100;
+}
+
+/**
+ * Determine likelihood description from certainty
+ */
+function determineLikelihood(certainty: number): string {
+  if (certainty >= 95) return "Near-certain (95-100%)";
+  if (certainty >= 85) return "Very likely (85-95%)";
+  if (certainty >= 70) return "Likely (70-85%)";
+  if (certainty >= 50) return "Possible (50-70%)";
+  if (certainty >= 30) return "Unlikely (30-50%)";
+  if (certainty >= 10) return "Very unlikely (10-30%)";
+  return "Very unlikely (0-10%)";
+}
+
+/**
+ * Create a default verdict when permutation lookup fails
+ */
+function createDefaultVerdict(
+  ovalPosition: { equatorwardEdge: number; centerLat: number; polewardEdge: number },
+  exampleCities: string[]
+): AuroraVerdict {
+  return {
+    intensityScore: 0,
+    strengthCategory: "NO AURORA",
+    strengthEmoji: "⚫",
+    minGeomagneticLat: 70,
+    visibilityRange: "Data unavailable",
+    exampleCities: [],
+    certainty: 0,
+    ovalPosition,
+    physicsFlag: "⚠️ DATA ERROR",
+    physicsNotes: "Permutation lookup failed - check input data",
+    alertLevel: "QUIET: No Activity",
+    viewingTip: "Unable to calculate - check back later",
+    auroraType: "",
+    auroraColors: "",
+    auroraStructure: "",
+    durationHours: "0",
+    probability: 0,
+    verdictCategory: "NO AURORA",
+    verdictEmoji: "⚫",
+    likelihood: "Unknown",
+    latitudeReach: "Unknown",
+    minLatitude: 70,
   };
 }
 
