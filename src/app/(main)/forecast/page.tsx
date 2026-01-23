@@ -263,28 +263,31 @@ export default function ForecastPage() {
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push("/intelligence?tab=cosmic")}
-              className="text-gray-400 hover:text-white"
+        <div className="mb-6">
+          <button
+            onClick={() => router.push("/intelligence?tab=aurora-intel")}
+            className="flex items-center gap-2 text-gray-400 hover:text-white mb-4 transition-colors"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-            <h1 className="text-2xl font-bold text-white">Aurora Forecasts</h1>
-          </div>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            Back to Aurora Intel
+          </button>
+
+          <h1 className="text-3xl font-bold mb-2">Kp Forecast</h1>
+          <p className="text-gray-400">
+            KP index data from NOAA Space Weather Prediction Center
+          </p>
         </div>
 
         {/* Current KP */}

@@ -39,9 +39,11 @@ export default function IntelligencePage() {
   const [loadingMoon, setLoadingMoon] = useState(true);
   const [currentBz, setCurrentBz] = useState<number | null>(null);
   const [loadingBz, setLoadingBz] = useState(true);
+  const [bzLastUpdated, setBzLastUpdated] = useState<string | null>(null);
   const [currentBt, setCurrentBt] = useState<number | null>(null);
   const [solarWindSpeed, setSolarWindSpeed] = useState<number | null>(null);
   const [solarWindDensity, setSolarWindDensity] = useState<number | null>(null);
+  const [solarWindLastUpdated, setSolarWindLastUpdated] = useState<string | null>(null);
   const [loadingSolarWind, setLoadingSolarWind] = useState(true);
   const [cmeData, setCmeData] = useState<{
     isActive: boolean;
@@ -76,6 +78,15 @@ export default function IntelligencePage() {
     arrivalEstimate: string;
   } | null>(null);
   const [loadingCoronalHole, setLoadingCoronalHole] = useState(true);
+  const [sunspotNumber, setSunspotNumber] = useState<number | null>(null);
+  const [sunspotLastUpdated, setSunspotLastUpdated] = useState<string | null>(null);
+  const [loadingSunspot, setLoadingSunspot] = useState(true);
+  const [hemispherePower, setHemispherePower] = useState<{
+    north: number;
+    south: number;
+    timestamp: string;
+  } | null>(null);
+  const [loadingHemispherePower, setLoadingHemispherePower] = useState(true);
 
   // Enhanced Bz history and substorm detection states
   const [bzHistory, setBzHistory] = useState<{
@@ -87,6 +98,7 @@ export default function IntelligencePage() {
     isSustained45: boolean;  // 45+ min
     isSustained90: boolean;  // 90+ min
     bzTrend: 'strengthening' | 'weakening' | 'stable';
+    readings: number[];  // Last 90 min of Bz readings (oldest to newest)
   } | null>(null);
   const [goesData, setGoesData] = useState<{
     currentKp: number;
@@ -164,6 +176,7 @@ export default function IntelligencePage() {
   }>>([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [recommendationsSearched, setRecommendationsSearched] = useState(false);
+  const [searchRadiusHours, setSearchRadiusHours] = useState<number>(2); // Track the search radius used (2 or 4 hours)
 
   // Prepare Now alert state
   const [upcomingClearWindow, setUpcomingClearWindow] = useState<{
@@ -181,15 +194,51 @@ export default function IntelligencePage() {
   const [showCloudIntelSuggestions, setShowCloudIntelSuggestions] = useState(false);
   const [loadingCloudIntelSuggestions, setLoadingCloudIntelSuggestions] = useState(false);
   const [cloudIntelSelectedIndex, setCloudIntelSelectedIndex] = useState(-1);
+  const [autoDetectingLocation, setAutoDetectingLocation] = useState(false);
+  const [hasAutoDetected, setHasAutoDetected] = useState(false);
+  const [hasAutoDetectedYourLocation, setHasAutoDetectedYourLocation] = useState(false);
+  const [hasAutoDetectedHuntLocation, setHasAutoDetectedHuntLocation] = useState(false);
   const cloudIntelInputRef = useRef<HTMLInputElement>(null);
   const cloudIntelSuggestionsRef = useRef<HTMLDivElement>(null);
   const cloudIntelDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Celestial events state
+  const [nextCelestialEvent, setNextCelestialEvent] = useState<{
+    name: string;
+    date: string;
+    type: string;
+    description: string;
+    daysUntil: number;
+  } | null>(null);
+
+  // Light pollution state
+  const [lightPollution, setLightPollution] = useState<{
+    bortle: number;
+    description: string;
+    color: string;
+  } | null>(null);
+
+  // Twilight/Sun data state
+  const [twilightData, setTwilightData] = useState<{
+    currentPeriod: 'night' | 'astronomical' | 'nautical' | 'civil' | 'daylight';
+    sunrise: string;
+    sunset: string;
+    isDay: boolean;
+    nextEvent: string; // sunrise or sunset time
+    nextEventType: 'sunrise' | 'sunset';
+  } | null>(null);
+
   // Autocomplete states
   const [huntLocationSuggestions, setHuntLocationSuggestions] = useState<any[]>([]);
   const [showHuntLocationSuggestions, setShowHuntLocationSuggestions] = useState(false);
+  const [loadingHuntLocationSuggestions, setLoadingHuntLocationSuggestions] = useState(false);
+  const [huntLocationSelectedIndex, setHuntLocationSelectedIndex] = useState(-1);
   const [yourLocationSuggestions, setYourLocationSuggestions] = useState<any[]>([]);
   const [showYourLocationSuggestions, setShowYourLocationSuggestions] = useState(false);
+  const [loadingYourLocationSuggestions, setLoadingYourLocationSuggestions] = useState(false);
+  const [yourLocationSelectedIndex, setYourLocationSelectedIndex] = useState(-1);
+  const huntLocationDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const yourLocationDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Update active tab when URL parameter changes
@@ -207,7 +256,20 @@ export default function IntelligencePage() {
     fetchCmeData();
     fetchHssData();
     fetchSolarFlareData();
+    fetchNextCelestialEvent();
     fetchCoronalHoleData();
+    fetchSunspotData();
+    fetchHemispherePower();
+
+    // Auto-refresh real-time data every 60 seconds
+    const refreshInterval = setInterval(() => {
+      fetchCurrentKp();
+      fetchCurrentBz();
+      fetchSolarWindData();
+      fetchHemispherePower();
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // Fetch substorm data after Kp and Bz history are available
@@ -221,15 +283,156 @@ export default function IntelligencePage() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (!target.closest('.hunt-location-autocomplete') && !target.closest('.your-location-autocomplete')) {
+      if (!target.closest('.hunt-location-autocomplete') && !target.closest('input[value]')) {
         setShowHuntLocationSuggestions(false);
+        setHuntLocationSelectedIndex(-1);
+      }
+      if (!target.closest('.your-location-autocomplete') && !target.closest('input[value]')) {
         setShowYourLocationSuggestions(false);
+        setYourLocationSelectedIndex(-1);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Auto-detect location for Cloud Intel tab
+  useEffect(() => {
+    if (activeTab === "cloud" && !hasAutoDetected && !cloudIntelData && !loadingCloudIntel) {
+      autoDetectCloudIntelLocation();
+    }
+  }, [activeTab, hasAutoDetected, cloudIntelData, loadingCloudIntel]);
+
+  // Auto-detect "Your Location" (Gate 2) for AIvisor tab
+  useEffect(() => {
+    if (activeTab === "aurora-intel" && !hasAutoDetectedHuntLocation && !huntLocationCoords && !gettingGPSLocation) {
+      setHasAutoDetectedHuntLocation(true);
+      handleGetHuntLocationGPS();
+    }
+  }, [activeTab, hasAutoDetectedHuntLocation, huntLocationCoords, gettingGPSLocation]);
+
+  // Estimate light pollution based on location type
+  const estimateLightPollution = (addressData: any) => {
+    // Bortle scale: 1 (darkest) to 9 (brightest city center)
+    // We estimate based on settlement type from reverse geocoding
+    let bortle = 5; // Default to suburban
+
+    const city = addressData?.city?.toLowerCase() || "";
+    const town = addressData?.town?.toLowerCase() || "";
+    const village = addressData?.village?.toLowerCase() || "";
+    const hamlet = addressData?.hamlet?.toLowerCase() || "";
+    const county = addressData?.county?.toLowerCase() || "";
+    const country = addressData?.country?.toLowerCase() || "";
+    const state = addressData?.state?.toLowerCase() || "";
+
+    // List of major metropolitan areas / city-states (Bortle 9)
+    const majorMetros = [
+      "singapore", "hong kong", "tokyo", "new york", "london", "paris",
+      "shanghai", "beijing", "seoul", "mumbai", "delhi", "los angeles",
+      "chicago", "houston", "phoenix", "philadelphia", "san antonio",
+      "san diego", "dallas", "san jose", "bangkok", "jakarta", "manila",
+      "kuala lumpur", "taipei", "osaka", "guangzhou", "shenzhen", "dubai",
+      "abu dhabi", "doha", "riyadh", "moscow", "istanbul", "cairo",
+      "lagos", "johannesburg", "sydney", "melbourne", "toronto", "montreal",
+      "vancouver", "mexico city", "são paulo", "rio de janeiro", "buenos aires"
+    ];
+
+    // City-states where country name matches city (Bortle 9)
+    const cityStates = ["singapore", "hong kong", "macau", "monaco", "vatican"];
+
+    // Check if it's a city-state or major metro
+    const isCityState = cityStates.some(cs =>
+      country.includes(cs) || city.includes(cs) || state.includes(cs)
+    );
+    const isMajorMetro = majorMetros.some(metro =>
+      city.includes(metro) || town.includes(metro)
+    );
+
+    if (isCityState || isMajorMetro) {
+      bortle = 9; // Inner city - highest light pollution
+    } else if (hamlet) {
+      bortle = 3; // Rural sky
+    } else if (village) {
+      bortle = 4; // Rural/suburban transition
+    } else if (town) {
+      bortle = 6; // Bright suburban
+    } else if (city) {
+      bortle = 8; // City sky (default for any city)
+    } else if (county && !city && !town) {
+      bortle = 3; // Rural area (county only, no city/town)
+    }
+
+    const bortleDescriptions: { [key: number]: { description: string; color: string } } = {
+      1: { description: "Excellent Dark Sky", color: "#000000" },
+      2: { description: "Typical Dark Site", color: "#1a1a2e" },
+      3: { description: "Rural Sky", color: "#16213e" },
+      4: { description: "Rural/Suburban", color: "#1f4068" },
+      5: { description: "Suburban Sky", color: "#5d5d8b" },
+      6: { description: "Bright Suburban", color: "#8a8ab0" },
+      7: { description: "Suburban/Urban", color: "#c4a35a" },
+      8: { description: "City Sky", color: "#e09f3e" },
+      9: { description: "Inner City", color: "#ff6b6b" },
+    };
+
+    setLightPollution({
+      bortle,
+      description: bortleDescriptions[bortle]?.description || "Unknown",
+      color: bortleDescriptions[bortle]?.color || "#5d5d8b",
+    });
+  };
+
+  // Auto-detect user's location for Cloud Intel
+  const autoDetectCloudIntelLocation = async () => {
+    if (!navigator.geolocation) {
+      return; // Silently fail if geolocation not supported
+    }
+
+    setAutoDetectingLocation(true);
+    setHasAutoDetected(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+
+        // Reverse geocode to get location name
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+          );
+          const data = await response.json();
+          const locationName = data.address?.city || data.address?.town || data.address?.village || data.address?.county || "Current Location";
+          const country = data.address?.country || "";
+
+          setCloudIntelLocation(`${locationName}${country ? `, ${country}` : ""}`);
+          setCloudIntelCoords({ lat, lon });
+          setAutoDetectingLocation(false);
+
+          // Estimate light pollution based on location type
+          estimateLightPollution(data.address);
+
+          // Automatically fetch cloud data and twilight data
+          fetchCloudIntelData(lat, lon);
+          fetchTwilightData(lat, lon);
+        } catch (error) {
+          console.error("Error reverse geocoding:", error);
+          setCloudIntelLocation("Current Location");
+          setCloudIntelCoords({ lat, lon });
+          setAutoDetectingLocation(false);
+          // Default to suburban light pollution if reverse geocoding fails
+          setLightPollution({ bortle: 5, description: "Suburban Sky", color: "#5d5d8b" });
+          fetchCloudIntelData(lat, lon);
+          fetchTwilightData(lat, lon);
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setAutoDetectingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    );
+  };
 
   const fetchMoonPhase = async () => {
     try {
@@ -278,6 +481,52 @@ export default function IntelligencePage() {
     }
   };
 
+  const fetchNextCelestialEvent = () => {
+    // Known annual celestial events (approximate peak dates)
+    const currentYear = new Date().getFullYear();
+    const celestialEvents = [
+      { name: "Quadrantids", date: `${currentYear}-01-03`, type: "meteor", description: "Up to 120 meteors/hour at peak", emoji: "☄️" },
+      { name: "Lyrids", date: `${currentYear}-04-22`, type: "meteor", description: "Up to 20 meteors/hour, bright fireballs", emoji: "☄️" },
+      { name: "Eta Aquariids", date: `${currentYear}-05-06`, type: "meteor", description: "Up to 50 meteors/hour, Halley's Comet debris", emoji: "☄️" },
+      { name: "Delta Aquariids", date: `${currentYear}-07-30`, type: "meteor", description: "Up to 20 meteors/hour", emoji: "☄️" },
+      { name: "Perseids", date: `${currentYear}-08-12`, type: "meteor", description: "Up to 100 meteors/hour, most popular shower", emoji: "☄️" },
+      { name: "Draconids", date: `${currentYear}-10-08`, type: "meteor", description: "Up to 10 meteors/hour, occasional outbursts", emoji: "☄️" },
+      { name: "Orionids", date: `${currentYear}-10-21`, type: "meteor", description: "Up to 20 meteors/hour, Halley's Comet debris", emoji: "☄️" },
+      { name: "Taurids", date: `${currentYear}-11-05`, type: "meteor", description: "Slow, bright fireballs", emoji: "☄️" },
+      { name: "Leonids", date: `${currentYear}-11-17`, type: "meteor", description: "Up to 15 meteors/hour, fast meteors", emoji: "☄️" },
+      { name: "Geminids", date: `${currentYear}-12-14`, type: "meteor", description: "Up to 150 meteors/hour, best annual shower", emoji: "☄️" },
+      { name: "Ursids", date: `${currentYear}-12-22`, type: "meteor", description: "Up to 10 meteors/hour", emoji: "☄️" },
+      // Next year events for continuity
+      { name: "Quadrantids", date: `${currentYear + 1}-01-03`, type: "meteor", description: "Up to 120 meteors/hour at peak", emoji: "☄️" },
+      { name: "Lyrids", date: `${currentYear + 1}-04-22`, type: "meteor", description: "Up to 20 meteors/hour, bright fireballs", emoji: "☄️" },
+    ];
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    // Find the next upcoming event
+    const upcomingEvents = celestialEvents
+      .map(event => {
+        const eventDate = new Date(event.date);
+        const daysUntil = Math.ceil((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return { ...event, daysUntil };
+      })
+      .filter(event => event.daysUntil >= -3) // Include events up to 3 days past (still visible)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+
+    if (upcomingEvents.length > 0) {
+      const next = upcomingEvents[0];
+      const eventDate = new Date(next.date);
+      setNextCelestialEvent({
+        name: next.name,
+        date: eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        type: next.type,
+        description: next.description,
+        daysUntil: next.daysUntil,
+      });
+    }
+  };
+
   const fetchCurrentKp = async () => {
     try {
       const response = await fetch("/api/space-weather/kp-index");
@@ -307,6 +556,7 @@ export default function IntelligencePage() {
         const latestReading = data[data.length - 1];
         const bzValue = parseFloat(latestReading[3]);
         const btValue = parseFloat(latestReading[6]); // Bt is in column 6
+        const timestamp = latestReading[0]; // Timestamp from API
 
         if (!isNaN(bzValue)) {
           setCurrentBz(bzValue);
@@ -314,8 +564,17 @@ export default function IntelligencePage() {
         if (!isNaN(btValue)) {
           setCurrentBt(btValue);
         }
+        if (timestamp) {
+          setBzLastUpdated(timestamp);
+        }
 
         // Enhanced Bz history calculation (last 90 minutes)
+        // Parse NOAA timestamp format "2024-01-23 12:34:00.000" -> ISO format
+        const parseNoaaTimestamp = (ts: string) => {
+          // Replace space with 'T' and add 'Z' for UTC
+          return new Date(ts.replace(' ', 'T') + 'Z');
+        };
+
         const now = new Date();
         const ninetyMinutesAgo = new Date(now.getTime() - 90 * 60 * 1000);
         const fortyFiveMinutesAgo = new Date(now.getTime() - 45 * 60 * 1000);
@@ -333,7 +592,7 @@ export default function IntelligencePage() {
         // Iterate backwards through data to check last 90 min
         for (let i = data.length - 1; i >= 1; i--) {
           const reading = data[i];
-          const timestamp = new Date(reading[0]);
+          const timestamp = parseNoaaTimestamp(reading[0]);
 
           if (timestamp < ninetyMinutesAgo) break;
 
@@ -372,7 +631,8 @@ export default function IntelligencePage() {
           isSustained15: southwardMinutes15 >= 15,
           isSustained45: southwardMinutes45 >= 30, // 30+ min in last 45
           isSustained90: southwardMinutes90 >= 45, // 45+ min in last 90
-          bzTrend: bzTrend
+          bzTrend: bzTrend,
+          readings: bzValues.reverse() // Reverse to get oldest to newest
         });
       }
       setLoadingBz(false);
@@ -393,12 +653,16 @@ export default function IntelligencePage() {
         const latestReading = data[data.length - 1];
         const density = parseFloat(latestReading[1]);
         const speed = parseFloat(latestReading[2]);
+        const timestamp = latestReading[0]; // Timestamp from API
 
         if (!isNaN(density)) {
           setSolarWindDensity(density);
         }
         if (!isNaN(speed)) {
           setSolarWindSpeed(speed);
+        }
+        if (timestamp) {
+          setSolarWindLastUpdated(timestamp);
         }
       }
       setLoadingSolarWind(false);
@@ -785,6 +1049,76 @@ export default function IntelligencePage() {
     }
   };
 
+  const fetchSunspotData = async () => {
+    try {
+      // Fetch solar indices data from NOAA which includes sunspot number
+      const response = await fetch(
+        "https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json"
+      );
+
+      if (!response.ok) {
+        console.warn('Sunspot API returned error:', response.status);
+        setLoadingSunspot(false);
+        return;
+      }
+
+      const data = await response.json();
+
+      // Get the most recent entry (last in array)
+      if (data && data.length > 0) {
+        const latestData = data[data.length - 1];
+        setSunspotNumber(latestData.ssn || 0);
+        setSunspotLastUpdated(latestData["time-tag"] || null);
+      }
+
+      setLoadingSunspot(false);
+    } catch (error) {
+      console.error("Error fetching sunspot data:", error);
+      setLoadingSunspot(false);
+    }
+  };
+
+  const fetchHemispherePower = async () => {
+    try {
+      const response = await fetch(
+        "https://services.swpc.noaa.gov/text/aurora-nowcast-hemi-power.txt"
+      );
+
+      if (!response.ok) {
+        console.warn('Hemisphere power API returned error:', response.status);
+        setLoadingHemispherePower(false);
+        return;
+      }
+
+      const text = await response.text();
+      const lines = text.split('\n').filter(line =>
+        line.trim() && !line.startsWith('#') && !line.startsWith(':')
+      );
+
+      // Get the most recent data line (last non-empty, non-comment line)
+      if (lines.length > 0) {
+        const lastLine = lines[lines.length - 1];
+        const parts = lastLine.trim().split(/\s+/);
+
+        // Format: Observation_Time  Forecast_Time  North_GW  South_GW
+        if (parts.length >= 4) {
+          const north = parseInt(parts[2], 10);
+          const south = parseInt(parts[3], 10);
+          const timestamp = parts[0].replace('_', ' ');
+
+          if (!isNaN(north) && !isNaN(south)) {
+            setHemispherePower({ north, south, timestamp });
+          }
+        }
+      }
+
+      setLoadingHemispherePower(false);
+    } catch (error) {
+      console.error("Error fetching hemisphere power:", error);
+      setLoadingHemispherePower(false);
+    }
+  };
+
   const fetchGoesData = async () => {
     // Comprehensive substorm analysis using energy loading model
     try {
@@ -1044,11 +1378,10 @@ export default function IntelligencePage() {
   };
 
   const getSpeedColor = (speed: number) => {
-    if (speed >= 700) return "#00ff00";
-    if (speed >= 600) return "#7fff00";
-    if (speed >= 500) return "#ffff00";
-    if (speed >= 400) return "#ffaa00";
-    return "#ff6666";
+    // Traffic light system: Green = Good (fast), Yellow = Moderate, Red = Poor (slow)
+    if (speed >= 500) return "#22c55e"; // Green (good for aurora)
+    if (speed >= 400) return "#eab308"; // Yellow (moderate)
+    return "#ef4444"; // Red (slow - less aurora activity)
   };
 
   const getSpeedStatus = (speed: number) => {
@@ -1065,6 +1398,20 @@ export default function IntelligencePage() {
     if (density >= 10) return "Good";
     if (density >= 5) return "Fair";
     return "Poor";
+  };
+
+  const getHemispherePowerColor = (gw: number) => {
+    // Traffic light: Green = strong aurora, Yellow = moderate, Red = weak
+    if (gw >= 50) return "#22c55e"; // Green (strong aurora activity)
+    if (gw >= 20) return "#eab308"; // Yellow (moderate)
+    return "#ef4444"; // Red (quiet)
+  };
+
+  const getHemispherePowerStatus = (gw: number) => {
+    if (gw >= 100) return "Severe";
+    if (gw >= 50) return "High";
+    if (gw >= 20) return "Active";
+    return "Quiet";
   };
 
   const getMoonPhaseEmoji = (phase: string) => {
@@ -1143,69 +1490,171 @@ export default function IntelligencePage() {
 
   // Autocomplete functions
   const fetchHuntLocationSuggestions = async (query: string) => {
-    if (query.length < 3) {
+    if (query.length < 2) {
       setHuntLocationSuggestions([]);
       setShowHuntLocationSuggestions(false);
       return;
     }
 
+    setLoadingHuntLocationSuggestions(true);
     try {
       const response = await fetch(
-        `/api/geocode/search?q=${encodeURIComponent(query)}`
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=en&format=json`
       );
       const data = await response.json();
-      setHuntLocationSuggestions(data);
+      setHuntLocationSuggestions(data.results || []);
       setShowHuntLocationSuggestions(true);
+      setHuntLocationSelectedIndex(-1);
     } catch (error) {
       console.error("Error fetching hunt location suggestions:", error);
+      setHuntLocationSuggestions([]);
+    } finally {
+      setLoadingHuntLocationSuggestions(false);
     }
   };
 
   const fetchYourLocationSuggestions = async (query: string) => {
-    if (query.length < 3) {
+    if (query.length < 2) {
       setYourLocationSuggestions([]);
       setShowYourLocationSuggestions(false);
       return;
     }
 
+    setLoadingYourLocationSuggestions(true);
     try {
       const response = await fetch(
-        `/api/geocode/search?q=${encodeURIComponent(query)}`
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=en&format=json`
       );
       const data = await response.json();
-      setYourLocationSuggestions(data);
+      setYourLocationSuggestions(data.results || []);
       setShowYourLocationSuggestions(true);
+      setYourLocationSelectedIndex(-1);
     } catch (error) {
       console.error("Error fetching your location suggestions:", error);
+      setYourLocationSuggestions([]);
+    } finally {
+      setLoadingYourLocationSuggestions(false);
+    }
+  };
+
+  const handleHuntLocationChange = (value: string) => {
+    setHuntLocation(value);
+    if (huntLocationDebounceTimer.current) {
+      clearTimeout(huntLocationDebounceTimer.current);
+    }
+    if (value.length < 2) {
+      setHuntLocationSuggestions([]);
+      setShowHuntLocationSuggestions(false);
+      return;
+    }
+    huntLocationDebounceTimer.current = setTimeout(() => {
+      fetchHuntLocationSuggestions(value);
+    }, 300);
+  };
+
+  const handleYourLocationChange = (value: string) => {
+    setYourLocation(value);
+    if (yourLocationDebounceTimer.current) {
+      clearTimeout(yourLocationDebounceTimer.current);
+    }
+    if (value.length < 2) {
+      setYourLocationSuggestions([]);
+      setShowYourLocationSuggestions(false);
+      return;
+    }
+    yourLocationDebounceTimer.current = setTimeout(() => {
+      fetchYourLocationSuggestions(value);
+    }, 300);
+  };
+
+  const handleHuntLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showHuntLocationSuggestions || huntLocationSuggestions.length === 0) return;
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setHuntLocationSelectedIndex((prev) =>
+          prev < huntLocationSuggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHuntLocationSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (huntLocationSelectedIndex >= 0 && huntLocationSelectedIndex < huntLocationSuggestions.length) {
+          selectHuntLocationSuggestion(huntLocationSuggestions[huntLocationSelectedIndex]);
+        }
+        break;
+      case "Escape":
+        setShowHuntLocationSuggestions(false);
+        setHuntLocationSelectedIndex(-1);
+        break;
+    }
+  };
+
+  const handleYourLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showYourLocationSuggestions || yourLocationSuggestions.length === 0) return;
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setYourLocationSelectedIndex((prev) =>
+          prev < yourLocationSuggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setYourLocationSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (yourLocationSelectedIndex >= 0 && yourLocationSelectedIndex < yourLocationSuggestions.length) {
+          selectYourLocationSuggestion(yourLocationSuggestions[yourLocationSelectedIndex]);
+        }
+        break;
+      case "Escape":
+        setShowYourLocationSuggestions(false);
+        setYourLocationSelectedIndex(-1);
+        break;
     }
   };
 
   const selectHuntLocationSuggestion = (suggestion: any) => {
-    setHuntLocation(suggestion.display_name);
+    const displayName = `${suggestion.name}${suggestion.admin1 ? `, ${suggestion.admin1}` : ''}${suggestion.country ? `, ${suggestion.country}` : ''}`;
+    setHuntLocation(displayName);
+    setHuntLocationSuggestions([]);
     setShowHuntLocationSuggestions(false);
+    setHuntLocationSelectedIndex(-1);
     // Auto-submit when location is selected
     setHuntLocationCoords({
-      lat: parseFloat(suggestion.lat),
-      lon: parseFloat(suggestion.lon)
+      lat: suggestion.latitude,
+      lon: suggestion.longitude
     });
     // Trigger the data fetch
-    handleHuntLocationSubmitWithCoords(parseFloat(suggestion.lat), parseFloat(suggestion.lon));
+    handleHuntLocationSubmitWithCoords(suggestion.latitude, suggestion.longitude);
   };
 
   const selectYourLocationSuggestion = (suggestion: any) => {
-    setYourLocation(suggestion.display_name);
+    const displayName = `${suggestion.name}${suggestion.admin1 ? `, ${suggestion.admin1}` : ''}${suggestion.country ? `, ${suggestion.country}` : ''}`;
+    setYourLocation(displayName);
+    setYourLocationSuggestions([]);
     setShowYourLocationSuggestions(false);
+    setYourLocationSelectedIndex(-1);
     // Auto-submit when location is selected
     setYourLocationCoords({
-      lat: parseFloat(suggestion.lat),
-      lon: parseFloat(suggestion.lon)
+      lat: suggestion.latitude,
+      lon: suggestion.longitude
     });
     // Trigger the data fetch for your location only
-    handleYourLocationSubmitWithCoords(parseFloat(suggestion.lat), parseFloat(suggestion.lon));
+    handleYourLocationSubmitWithCoords(suggestion.latitude, suggestion.longitude);
   };
 
   // Location Recommendations - Find nearby locations with better cloud conditions
-  const fetchLocationRecommendations = async (userLat: number, userLon: number, currentWeatherData: any, sunsetTime?: Date) => {
+  // huntLat/huntLon = center point for searching (the cloudy hunt location)
+  // userLat/userLon = starting point for drive time calculation (user's current location)
+  const fetchLocationRecommendations = async (huntLat: number, huntLon: number, userLat: number, userLon: number, currentWeatherData: any, sunsetTime?: Date, maxDriveHours: number = 2) => {
     setLoadingRecommendations(true);
     setRecommendationsSearched(false);
 
@@ -1218,7 +1667,7 @@ export default function IntelligencePage() {
         hoursUntilSunset = Math.max(0, (sunsetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
         sunsetHourIndex = Math.round(hoursUntilSunset);
       }
-      // Generate grid of nearby locations (8 directions, 4 distances)
+      // Generate grid of nearby locations (8 directions, 4 distances) around HUNT location
       const directions = [
         { name: "North", angle: 0 },
         { name: "Northeast", angle: 45 },
@@ -1233,20 +1682,20 @@ export default function IntelligencePage() {
       const distances = [30, 60, 90, 120]; // km
       const locations: Array<{direction: string; distance: number; lat: number; lon: number}> = [];
 
-      // Generate grid points
+      // Generate grid points around the HUNT location
       for (const dir of directions) {
         for (const dist of distances) {
-          // Calculate new coordinates based on direction and distance
+          // Calculate new coordinates based on direction and distance from HUNT location
           const angleRad = (dir.angle * Math.PI) / 180;
           const distKm = dist;
           const latOffset = (distKm / 111) * Math.cos(angleRad); // 1 degree lat ≈ 111 km
-          const lonOffset = (distKm / (111 * Math.cos((userLat * Math.PI) / 180))) * Math.sin(angleRad);
+          const lonOffset = (distKm / (111 * Math.cos((huntLat * Math.PI) / 180))) * Math.sin(angleRad);
 
           locations.push({
             direction: dir.name,
             distance: dist,
-            lat: userLat + latOffset,
-            lon: userLon + lonOffset
+            lat: huntLat + latOffset,
+            lon: huntLon + lonOffset
           });
         }
       }
@@ -1256,13 +1705,13 @@ export default function IntelligencePage() {
 
       for (const loc of locations) {
         try {
-          // Fetch cloud forecast for this location (24 hours for timing analysis)
+          // Fetch cloud forecast for this location with layer data for accurate assessment
           const weatherResponse = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=cloud_cover&hourly=cloud_cover,time&forecast_hours=24&timezone=auto`
+            `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&hourly=cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,time&forecast_hours=24&timezone=auto`
           );
           const weatherData = await weatherResponse.json();
 
-          // Fetch drive time using OSRM
+          // Fetch drive time from USER location to this potential clear location
           const routeResponse = await fetch(
             `https://router.project-osrm.org/route/v1/driving/${userLon},${userLat};${loc.lon},${loc.lat}?overview=false`
           );
@@ -1275,38 +1724,49 @@ export default function IntelligencePage() {
           const driveTimeMinutes = Math.round(routeData.routes[0].duration / 60);
           const driveTimeHours = driveTimeMinutes / 60;
 
-          // Only consider locations within 2 hour drive
-          if (driveTimeHours > 2) continue;
+          // Only consider locations within max drive time
+          if (driveTimeHours > maxDriveHours) continue;
+
+          // Helper function to get effective cloud cover (max of total, low, mid)
+          const getEffectiveCloud = (idx: number) => {
+            const total = weatherData.hourly.cloud_cover[idx] || 0;
+            const low = weatherData.hourly.cloud_cover_low?.[idx] || 0;
+            const mid = weatherData.hourly.cloud_cover_mid?.[idx] || 0;
+            return Math.max(total, low, mid);
+          };
 
           // DAYTIME SCENARIO: Calculate conditions at sunset + drive time
           let cloudCoverAtTarget, targetHourIndex, departureTime;
           if (sunsetTime && sunsetHourIndex >= 0) {
             // For daytime: check cloud cover when they ARRIVE at sunset
             targetHourIndex = Math.min(sunsetHourIndex, 23);
-            cloudCoverAtTarget = weatherData.hourly.cloud_cover[targetHourIndex];
+            cloudCoverAtTarget = getEffectiveCloud(targetHourIndex);
 
             // Calculate departure time (sunset - drive time)
             departureTime = new Date(sunsetTime.getTime() - (driveTimeMinutes * 60 * 1000));
           } else {
             // NIGHTTIME SCENARIO: Calculate immediate arrival conditions
             targetHourIndex = Math.min(Math.round(driveTimeHours), 23);
-            cloudCoverAtTarget = weatherData.hourly.cloud_cover[targetHourIndex];
+            cloudCoverAtTarget = getEffectiveCloud(targetHourIndex);
           }
 
-          // Find when clear skies start (cloud cover < 30%)
+          // Find when clear skies start (effective cloud cover < 30%)
           let clearSkiesStartHour = -1;
           let clearSkiesStartTime = null;
           for (let i = 0; i < weatherData.hourly.cloud_cover.length; i++) {
-            if (weatherData.hourly.cloud_cover[i] < 30) {
+            if (getEffectiveCloud(i) < 30) {
               clearSkiesStartHour = i;
               clearSkiesStartTime = new Date(weatherData.hourly.time[i]);
               break;
             }
           }
 
-          // Analyze cloud trend
-          const cloudNow = weatherData.current.cloud_cover;
-          const cloudIn2h = weatherData.hourly.cloud_cover[Math.min(2, weatherData.hourly.cloud_cover.length - 1)];
+          // Analyze cloud trend using effective cloud cover (max of total, low, mid)
+          const currentTotal = weatherData.current.cloud_cover || 0;
+          const currentLow = weatherData.current.cloud_cover_low || 0;
+          const currentMid = weatherData.current.cloud_cover_mid || 0;
+          const cloudNow = Math.max(currentTotal, currentLow, currentMid);
+          const cloudIn2h = getEffectiveCloud(Math.min(2, weatherData.hourly.cloud_cover.length - 1));
 
           let trend = "stable";
           if (cloudIn2h < cloudNow - 15) trend = "clearing";
@@ -1342,23 +1802,33 @@ export default function IntelligencePage() {
         }
       }
 
-      // Sort by score (best first) and take top 5
-      recommendations.sort((a, b) => a.score - b.score);
-      const topRecommendations = recommendations.slice(0, 5);
-
-      // Filter: Only show if better than hunt location at arrival time
-      // Compare arrival time vs arrival time for fair comparison
-      const betterRecommendations = topRecommendations.filter(rec => {
-        // Calculate hunt location's cloud cover at same arrival time
-        const arrivalHourIndex = Math.min(Math.round(rec.driveTime / 60), 7);
-        const huntLocationCloudAtArrival = currentWeatherData.hourly?.cloud_cover?.[arrivalHourIndex]
-          || currentWeatherData.current.cloud_cover; // Fallback to current if no hourly data
-
-        // Only show if recommended location has at least 10% better cloud cover at arrival
-        return rec.cloudCoverAtArrival < huntLocationCloudAtArrival - 10;
+      // Sort by cloud cover at arrival (lower is better), then by drive time
+      recommendations.sort((a, b) => {
+        // Primary sort: cloud cover at arrival (clearer skies first)
+        if (a.cloudCoverAtArrival !== b.cloudCoverAtArrival) {
+          return a.cloudCoverAtArrival - b.cloudCoverAtArrival;
+        }
+        // Secondary sort: shorter drive time
+        return a.driveTime - b.driveTime;
       });
 
-      setLocationRecommendations(betterRecommendations);
+      // Take top 4 options - let user decide based on the info provided
+      // Add comparison info for each recommendation
+      const topRecommendations = recommendations.slice(0, 4).map(rec => {
+        const arrivalHourIndex = Math.min(Math.round(rec.driveTime / 60), 7);
+        const huntLocationCloudAtArrival = currentWeatherData.hourly?.cloud_cover?.[arrivalHourIndex]
+          || currentWeatherData.current.cloud_cover;
+        const improvement = huntLocationCloudAtArrival - rec.cloudCoverAtArrival;
+
+        return {
+          ...rec,
+          huntLocationCloudAtArrival,
+          improvement, // positive = better, negative = worse
+          isBetter: improvement > 0
+        };
+      });
+
+      setLocationRecommendations(topRecommendations);
       setRecommendationsSearched(true);
       setLoadingRecommendations(false);
     } catch (error) {
@@ -1375,11 +1845,23 @@ export default function IntelligencePage() {
     try {
 
       // Fetch weather data (current + hourly forecast) from Open-Meteo (free, no API key)
+      // Include cloud layer data for accurate aurora visibility assessment
       const weatherResponse = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=cloud_cover&hourly=cloud_cover,wind_speed_10m,wind_direction_10m,relative_humidity_2m,precipitation_probability&forecast_hours=12&timezone=auto`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&hourly=cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,relative_humidity_2m,precipitation_probability&forecast_hours=12&timezone=auto`
       );
       const weatherData = await weatherResponse.json();
-      setCloudCover(weatherData.current.cloud_cover);
+
+      // For aurora visibility, use the maximum cloud cover across all layers
+      // Low clouds (0-2km) are most impactful as they completely block the view
+      const totalCloud = weatherData.current.cloud_cover || 0;
+      const lowCloud = weatherData.current.cloud_cover_low || 0;
+      const midCloud = weatherData.current.cloud_cover_mid || 0;
+      const highCloud = weatherData.current.cloud_cover_high || 0;
+
+      // Use the maximum of total cloud cover or low clouds (most impactful for aurora viewing)
+      // Low/mid clouds block aurora completely; high thin clouds have less impact
+      const effectiveCloudCover = Math.max(totalCloud, lowCloud, midCloud);
+      setCloudCover(effectiveCloudCover);
 
       // Convert timezone to GMT format
       const utcOffsetSeconds = weatherData.utc_offset_seconds || 0;
@@ -1391,11 +1873,17 @@ export default function IntelligencePage() {
 
       setHuntLocationWeatherData(weatherData); // Store weather data for later use
 
-      // Store hourly forecast data
+      // Store hourly forecast data with effective cloud cover (max of layers)
       if (weatherData.hourly) {
+        const effectiveHourlyCloud = weatherData.hourly.cloud_cover.map((total: number, i: number) => {
+          const low = weatherData.hourly.cloud_cover_low?.[i] || 0;
+          const mid = weatherData.hourly.cloud_cover_mid?.[i] || 0;
+          return Math.max(total, low, mid);
+        });
+
         setCloudForecast({
           time: weatherData.hourly.time,
-          cloudCover: weatherData.hourly.cloud_cover,
+          cloudCover: effectiveHourlyCloud,
           windSpeed: weatherData.hourly.wind_speed_10m,
           windDirection: weatherData.hourly.wind_direction_10m,
           humidity: weatherData.hourly.relative_humidity_2m,
@@ -1530,16 +2018,15 @@ export default function IntelligencePage() {
         setUpcomingClearWindow(null);
       }
 
-      // Fetch location recommendations for "WAIT FOR DARKNESS" scenario
-      // During daytime: help users find locations that will be clear after sunset
-      // During night/cloudy: help users find locations with better current conditions
+      // Fetch location recommendations for cloudy hunt locations
+      // Search around HUNT location for clear skies, calculate drive time from USER location
       if (yourLocationCoords) {
         if (status === "Day") {
-          // Daytime: Find locations that will be clear after sunset (pass sunset time)
-          fetchLocationRecommendations(yourLocationCoords.lat, yourLocationCoords.lon, weatherData, sunset);
+          // Daytime: Find locations near hunt location that will be clear after sunset
+          fetchLocationRecommendations(lat, lon, yourLocationCoords.lat, yourLocationCoords.lon, weatherData, sunset);
         } else if (weatherData.current.cloud_cover > 50) {
-          // Night/Twilight + cloudy: Find locations with better current conditions
-          fetchLocationRecommendations(yourLocationCoords.lat, yourLocationCoords.lon, weatherData);
+          // Night/Twilight + cloudy: Find locations near hunt location with better conditions
+          fetchLocationRecommendations(lat, lon, yourLocationCoords.lat, yourLocationCoords.lon, weatherData);
         }
       }
 
@@ -1874,13 +2361,84 @@ export default function IntelligencePage() {
     }
   };
 
-  const handleCloudIntelLocationSelect = (suggestion: any) => {
+  const fetchTwilightData = async (lat: number, lon: number) => {
+    try {
+      const response = await fetch(
+        `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&formatted=0`
+      );
+      const data = await response.json();
+
+      if (data.status === 'OK') {
+        const now = new Date();
+        const sunrise = new Date(data.results.sunrise);
+        const sunset = new Date(data.results.sunset);
+        const civilTwilightBegin = new Date(data.results.civil_twilight_begin);
+        const civilTwilightEnd = new Date(data.results.civil_twilight_end);
+        const nauticalTwilightBegin = new Date(data.results.nautical_twilight_begin);
+        const nauticalTwilightEnd = new Date(data.results.nautical_twilight_end);
+        const astronomicalTwilightBegin = new Date(data.results.astronomical_twilight_begin);
+        const astronomicalTwilightEnd = new Date(data.results.astronomical_twilight_end);
+
+        // Determine current period
+        let currentPeriod: 'night' | 'astronomical' | 'nautical' | 'civil' | 'daylight' = 'night';
+
+        if (now >= sunrise && now <= sunset) {
+          currentPeriod = 'daylight';
+        } else if ((now >= civilTwilightBegin && now < sunrise) || (now > sunset && now <= civilTwilightEnd)) {
+          currentPeriod = 'civil';
+        } else if ((now >= nauticalTwilightBegin && now < civilTwilightBegin) || (now > civilTwilightEnd && now <= nauticalTwilightEnd)) {
+          currentPeriod = 'nautical';
+        } else if ((now >= astronomicalTwilightBegin && now < nauticalTwilightBegin) || (now > nauticalTwilightEnd && now <= astronomicalTwilightEnd)) {
+          currentPeriod = 'astronomical';
+        } else {
+          currentPeriod = 'night';
+        }
+
+        const isDay = now >= sunrise && now <= sunset;
+
+        // Format time
+        const formatTime = (date: Date) => {
+          return date.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          });
+        };
+
+        setTwilightData({
+          currentPeriod,
+          sunrise: formatTime(sunrise),
+          sunset: formatTime(sunset),
+          isDay,
+          nextEvent: isDay ? formatTime(sunset) : formatTime(sunrise),
+          nextEventType: isDay ? 'sunset' : 'sunrise'
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching twilight data:", error);
+    }
+  };
+
+  const handleCloudIntelLocationSelect = async (suggestion: any) => {
     setCloudIntelLocation(`${suggestion.name}, ${suggestion.admin1 || suggestion.country}`);
     setCloudIntelCoords({ lat: suggestion.latitude, lon: suggestion.longitude });
     setCloudIntelSuggestions([]);
     setShowCloudIntelSuggestions(false);
     setCloudIntelSelectedIndex(-1);
     fetchCloudIntelData(suggestion.latitude, suggestion.longitude);
+    fetchTwilightData(suggestion.latitude, suggestion.longitude);
+
+    // Fetch light pollution estimate via reverse geocoding
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${suggestion.latitude}&lon=${suggestion.longitude}&format=json`
+      );
+      const data = await response.json();
+      estimateLightPollution(data.address);
+    } catch (error) {
+      // Default to suburban if reverse geocoding fails
+      setLightPollution({ bortle: 5, description: "Suburban Sky", color: "#5d5d8b" });
+    }
   };
 
   const handleCloudIntelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1992,17 +2550,10 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Intel
-              </button>
-              <button
-                onClick={() => setActiveTab("aurora-intel")}
-                className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
-                  activeTab === "aurora-intel"
-                    ? "bg-aurora-green text-black"
-                    : "bg-white/5 text-gray-400 hover:bg-white/10"
-                }`}
-              >
-                Aurora
+                <div className="flex flex-col items-center">
+                  <span className="text-lg">🚀</span>
+                  <span className="text-xs">AIvisor</span>
+                </div>
               </button>
               <button
                 onClick={() => setActiveTab("cosmic")}
@@ -2012,7 +2563,23 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Cosmic
+                <div className="flex flex-col items-center">
+                  <span className="text-lg">🔆</span>
+                  <span className="text-xs">Forecast</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab("aurora-intel")}
+                className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
+                  activeTab === "aurora-intel"
+                    ? "bg-aurora-green text-black"
+                    : "bg-white/5 text-gray-400 hover:bg-white/10"
+                }`}
+              >
+                <div className="flex flex-col items-center">
+                  <span className="text-lg">🌌</span>
+                  <span className="text-xs">Analysis</span>
+                </div>
               </button>
               <button
                 onClick={() => setActiveTab("cloud")}
@@ -2022,17 +2589,10 @@ export default function IntelligencePage() {
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
-                Cloud
-              </button>
-              <button
-                onClick={() => setActiveTab("map")}
-                className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
-                  activeTab === "map"
-                    ? "bg-aurora-green text-black"
-                    : "bg-white/5 text-gray-400 hover:bg-white/10"
-                }`}
-              >
-                Map
+                <div className="flex flex-col items-center">
+                  <span className="text-lg">⛅</span>
+                  <span className="text-xs">Intel</span>
+                </div>
               </button>
             </div>
           </div>
@@ -2042,31 +2602,192 @@ export default function IntelligencePage() {
       {/* Cloud Intel Tab */}
       {activeTab === "cloud" && (
         <div className="max-w-screen-lg mx-auto p-4">
-          {/* Location Input */}
-          <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-indigo-500/30 mb-6">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-2xl">📍</span>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-white">Location</h3>
-                <p className="text-xs text-gray-400">Enter location for cloud analysis</p>
+          <div className="space-y-4">
+            {/* Title */}
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-3xl font-bold text-white">⛅ Visibility Intel</h2>
+            </div>
+
+            {/* Sky Cards Grid */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Moon Phase Card */}
+              <div
+                onClick={() => router.push("/moon-phase")}
+                className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-2xl p-4 cursor-pointer hover:scale-[1.02] transition-transform"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col items-center">
+                    {loadingMoon ? (
+                      <div className="text-5xl animate-pulse">🌙</div>
+                    ) : moonPhase ? (
+                      <div className="text-5xl">
+                        {getMoonPhaseEmoji(moonPhase.phase)}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-gray-400 text-xs mb-1">Moon Phase</div>
+                    {loadingMoon ? (
+                      <div className="text-lg font-bold text-gray-400">...</div>
+                    ) : moonPhase ? (
+                      <>
+                        <div className="text-lg font-bold text-white truncate">
+                          {moonPhase.phase}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {moonPhase.illumination}% Illuminated
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                  <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Celestial Events Card */}
+              <div
+                onClick={() => router.push("/celestial-events")}
+                className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 backdrop-blur-lg rounded-2xl p-4 cursor-pointer hover:scale-[1.02] transition-transform"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col items-center">
+                    <div className="text-5xl">☄️</div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-gray-400 text-xs mb-1">Next Event</div>
+                    {nextCelestialEvent ? (
+                      <>
+                        <div className="text-lg font-bold text-white truncate">
+                          {nextCelestialEvent.name}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {nextCelestialEvent.daysUntil <= 0
+                            ? "Active now!"
+                            : nextCelestialEvent.daysUntil === 1
+                              ? "Tomorrow"
+                              : `In ${nextCelestialEvent.daysUntil} days`}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-lg font-bold text-gray-400">Loading...</div>
+                    )}
+                  </div>
+                  <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
               </div>
             </div>
 
-            <div className="relative flex gap-2">
-              <div className="flex-1 relative">
-                <input
-                  ref={cloudIntelInputRef}
-                  type="text"
-                  value={cloudIntelLocation}
-                  onChange={(e) => handleCloudIntelLocationChange(e.target.value)}
-                  onKeyDown={handleCloudIntelKeyDown}
-                  onFocus={() => {
-                    if (cloudIntelSuggestions.length > 0) setShowCloudIntelSuggestions(true);
-                  }}
-                  placeholder="e.g., Oslo, Norway"
-                  className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  autoComplete="off"
-                />
+            {/* Time of Day & Sunrise/Sunset Cards */}
+            {twilightData && (
+              <div className="grid grid-cols-2 gap-4">
+                {/* Time of Day Card */}
+                <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 backdrop-blur-lg rounded-2xl p-4 border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="text-4xl">
+                      {twilightData.currentPeriod === 'night' && '🌙'}
+                      {twilightData.currentPeriod === 'astronomical' && '🌌'}
+                      {twilightData.currentPeriod === 'nautical' && '🌊'}
+                      {twilightData.currentPeriod === 'civil' && '🌆'}
+                      {twilightData.currentPeriod === 'daylight' && '☀️'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-gray-400 text-xs mb-1">Time of Day</div>
+                      <div className="text-lg font-bold text-white capitalize">
+                        {twilightData.currentPeriod === 'astronomical' && 'Astronomical Twilight'}
+                        {twilightData.currentPeriod === 'nautical' && 'Nautical Twilight'}
+                        {twilightData.currentPeriod === 'civil' && 'Civil Twilight'}
+                        {twilightData.currentPeriod === 'daylight' && 'Daylight'}
+                        {twilightData.currentPeriod === 'night' && 'Night'}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {twilightData.currentPeriod === 'night' && 'Deep darkness - best for aurora'}
+                        {twilightData.currentPeriod === 'astronomical' && 'Sky is dark enough for faint stars'}
+                        {twilightData.currentPeriod === 'nautical' && 'Horizon barely visible'}
+                        {twilightData.currentPeriod === 'civil' && 'Enough light for outdoor activities'}
+                        {twilightData.currentPeriod === 'daylight' && 'Sun is above the horizon'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sunrise/Sunset Card */}
+                <a
+                  href="https://www.timeanddate.com/sun/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`block bg-gradient-to-br ${twilightData.isDay ? 'from-orange-900/40 to-red-900/40' : 'from-blue-900/40 to-indigo-900/40'} backdrop-blur-lg rounded-2xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] transition-transform`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="text-4xl">
+                      {twilightData.nextEventType === 'sunrise' ? '🌅' : '🌇'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-gray-400 text-xs mb-1">
+                        {twilightData.nextEventType === 'sunrise' ? 'Next Sunrise' : 'Next Sunset'}
+                      </div>
+                      <div className="text-lg font-bold text-white">
+                        {twilightData.nextEvent}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {twilightData.nextEventType === 'sunrise'
+                          ? 'Aurora viewing ends soon'
+                          : 'Aurora viewing begins soon'}
+                      </div>
+                    </div>
+                    <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </div>
+                </a>
+              </div>
+            )}
+
+            {/* Location Input */}
+            <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-indigo-500/30">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-2xl">📍</span>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-white">Location</h3>
+                  <p className="text-xs text-gray-400">
+                    {autoDetectingLocation ? "Detecting your location..." : "Auto-detected or enter manually"}
+                  </p>
+                </div>
+                <button
+                  onClick={autoDetectCloudIntelLocation}
+                  disabled={autoDetectingLocation}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                >
+                  {autoDetectingLocation ? (
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
+                  <span>Detect</span>
+                </button>
+              </div>
+
+              <div className="relative flex gap-2">
+                <div className="flex-1 relative">
+                  <input
+                    ref={cloudIntelInputRef}
+                    type="text"
+                    value={cloudIntelLocation}
+                    onChange={(e) => handleCloudIntelLocationChange(e.target.value)}
+                    onKeyDown={handleCloudIntelKeyDown}
+                    onFocus={() => {
+                      if (cloudIntelSuggestions.length > 0) setShowCloudIntelSuggestions(true);
+                    }}
+                    placeholder="e.g., Oslo, Norway"
+                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    autoComplete="off"
+                  />
 
                 {loadingCloudIntelSuggestions && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -2125,6 +2846,74 @@ export default function IntelligencePage() {
               </button>
             </div>
           </div>
+
+          {/* Light Pollution Card */}
+          {lightPollution && (
+            <a
+              href="https://lightpollutionmap.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block relative overflow-hidden rounded-2xl cursor-pointer hover:scale-[1.01] transition-transform border border-white/10 mt-4"
+              style={{
+                backgroundImage: "url('/images/light-pollution-levels.png')",
+                backgroundSize: "cover",
+                backgroundPosition: `center ${
+                  lightPollution.bortle <= 2 ? "0%" :
+                  lightPollution.bortle <= 4 ? "25%" :
+                  lightPollution.bortle <= 5 ? "50%" :
+                  lightPollution.bortle <= 7 ? "75%" : "100%"
+                }`,
+              }}
+            >
+              {/* Dark overlay for text readability */}
+              <div className="absolute inset-0 bg-black/40"></div>
+
+              <div className="relative z-10 p-4 flex items-center gap-4">
+                <div className="flex flex-col items-center">
+                  <div className="relative w-14 h-14 rounded-full flex items-center justify-center bg-black/30 backdrop-blur-sm border border-white/20">
+                    <span className="text-2xl">
+                      {lightPollution.bortle <= 2 ? "🌌" : lightPollution.bortle <= 4 ? "✨" : lightPollution.bortle <= 5 ? "🌃" : lightPollution.bortle <= 7 ? "🏘️" : "🏙️"}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-gray-300 text-xs mb-1">Light Pollution (Bortle Scale)</div>
+                  <div className="text-lg font-bold text-white drop-shadow-lg">
+                    Class {lightPollution.bortle}
+                  </div>
+                  <div className="text-xs text-gray-200">
+                    {lightPollution.description}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  {/* Bortle Scale Visual */}
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((level) => (
+                      <div
+                        key={level}
+                        className={`w-2 h-4 rounded-sm ${
+                          level <= lightPollution.bortle ? "opacity-100" : "opacity-30"
+                        }`}
+                        style={{
+                          backgroundColor:
+                            level <= 2 ? "#1a1a2e" :
+                            level <= 4 ? "#1f4068" :
+                            level <= 6 ? "#8a8ab0" :
+                            level <= 8 ? "#e09f3e" : "#ff6b6b"
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-gray-200">
+                    {lightPollution.bortle <= 3 ? "Great for aurora" : lightPollution.bortle <= 5 ? "Fair visibility" : "Light polluted"}
+                  </div>
+                  <svg className="w-4 h-4 text-white/70 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </div>
+              </div>
+            </a>
+          )}
 
           {loadingCloudIntel && (
             <div className="text-center py-12">
@@ -2388,12 +3177,21 @@ export default function IntelligencePage() {
             </>
           )}
 
-          {!cloudIntelData && !loadingCloudIntel && (
+          {!cloudIntelData && !loadingCloudIntel && !autoDetectingLocation && (
             <div className="text-center py-12">
-              <span className="text-6xl mb-4 block">☁️</span>
-              <p className="text-xl text-gray-300">Enter a location to analyze cloud layers</p>
+              <span className="text-6xl mb-4 block">⛅</span>
+              <p className="text-xl text-gray-300">Waiting for location...</p>
+              <p className="text-sm text-gray-500 mt-2">Click "Detect" or enter a location above</p>
             </div>
           )}
+
+          {autoDetectingLocation && (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+              <p className="text-gray-300 mt-4">Detecting your location...</p>
+            </div>
+          )}
+          </div>
         </div>
       )}
 
@@ -2527,328 +3325,482 @@ export default function IntelligencePage() {
       {activeTab === "cosmic" && (
         <div className="max-w-screen-lg mx-auto p-4">
           <div className="space-y-4">
-            {/* Moon Phase Card */}
-            <div
-              onClick={() => router.push("/moon-phase")}
-              className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-2xl p-6 cursor-pointer hover:scale-[1.02] transition-transform"
-            >
-              <div className="flex items-center gap-6">
-                <div className="flex flex-col items-center">
-                  {loadingMoon ? (
-                    <div className="text-6xl animate-pulse">🌙</div>
-                  ) : moonPhase ? (
-                    <div className="text-6xl mb-2">
-                      {getMoonPhaseEmoji(moonPhase.phase)}
+            {/* Aurora Forecast Title */}
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-3xl font-bold text-white">🔆 Aurora Forecast</h2>
+            </div>
+
+            {/* Navigation Cards - 3 Column Grid */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* CME Alerts Card */}
+              <button
+                onClick={() => router.push("/cme-alerts")}
+                className="bg-gradient-to-br from-orange-900/40 to-red-900/40 rounded-xl p-4 border border-orange-500/30 hover:scale-[1.02] hover:border-orange-400/50 transition-all"
+              >
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <span className="text-5xl">☄️</span>
+                  <h3 className="text-sm font-bold text-white">CME Alerts</h3>
+                </div>
+              </button>
+
+              {/* Solar Flare Card */}
+              <button
+                onClick={() => router.push("/solar-flares")}
+                className="bg-gradient-to-br from-yellow-900/40 to-orange-900/40 rounded-xl p-4 border border-yellow-500/30 hover:scale-[1.02] hover:border-yellow-400/50 transition-all"
+              >
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <span className="text-5xl">⚡</span>
+                  <h3 className="text-sm font-bold text-white">Solar Flare</h3>
+                </div>
+              </button>
+
+              {/* Coronal Holes Card */}
+              <button
+                onClick={() => router.push("/coronal-holes")}
+                className="bg-gradient-to-br from-purple-900/40 to-indigo-900/40 rounded-xl p-4 border border-purple-500/30 hover:scale-[1.02] hover:border-purple-400/50 transition-all"
+              >
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <span className="text-5xl">🕳️</span>
+                  <h3 className="text-sm font-bold text-white">Coronal Holes</h3>
+                </div>
+              </button>
+            </div>
+
+            {/* Real-time Solar Data Cards - 3 Column Grid */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* CME Alert Card - Shows CMEs with speed >= 400 */}
+              {(() => {
+                // Find CMEs with speed >= 400 (priority CMEs)
+                const now = new Date();
+                const upcomingPriorityCme = cmeAlertsList.find(cme => {
+                  const arrivalDate = new Date(cme.arrivalDate);
+                  return arrivalDate > now && cme.speed >= 400;
+                });
+                const pastPriorityCme = cmeAlertsList.find(cme => {
+                  const arrivalDate = new Date(cme.arrivalDate);
+                  return arrivalDate <= now && cme.speed >= 400;
+                });
+                const displayCme = upcomingPriorityCme || pastPriorityCme;
+                const isPast = !upcomingPriorityCme && pastPriorityCme;
+
+                // Labels and colors based on speed:
+                // >= 700: "Storm" 🟢 Green (high priority - excellent for aurora)
+                // >= 500: "Active" 🟢 Green (good for aurora)
+                // >= 400: "Weak" 🟡 Yellow (moderate)
+                const getSpeedLabel = (speed: number) => {
+                  if (speed >= 700) return 'Storm';
+                  if (speed >= 500) return 'Active';
+                  return 'Weak';
+                };
+                const getSpeedEmoji = (speed: number) => speed >= 500 ? '🟢' : '🟡';
+                const getSpeedColor = (speed: number) => speed >= 500 ? '#22c55e' : '#eab308';
+
+                return (
+                  <button
+                    onClick={() => router.push("/cme-alerts")}
+                    className={`bg-white/5 rounded-xl p-4 border border-white/10 hover:border-orange-500/40 transition-all text-left ${isPast ? 'opacity-50' : ''}`}
+                  >
+                    <div className="text-xs text-gray-400 mb-1">CME "Red" Alert</div>
+                    {loadingCme ? (
+                      <div className="text-lg font-bold text-gray-500">Loading...</div>
+                    ) : displayCme ? (
+                      <>
+                        <div
+                          className="text-2xl font-bold"
+                          style={{ color: getSpeedColor(displayCme.speed) }}
+                        >
+                          {getSpeedEmoji(displayCme.speed)} {getSpeedLabel(displayCme.speed)}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {isPast ? 'Arrived: ' : ''}{displayCme.arrivalDate}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-2xl font-bold text-gray-500">None</div>
+                        <div className="text-xs text-gray-500 mt-1">No active CME</div>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
+
+              {/* Solar Flare Activity Card */}
+              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="text-xs text-gray-400 mb-1">Solar Flare Activity</div>
+                {loadingFlare ? (
+                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                ) : solarFlare ? (
+                  <>
+                    <div
+                      className="text-2xl font-bold"
+                      style={{
+                        color: solarFlare.class === 'X' ? '#ef4444' :
+                               solarFlare.class === 'M' ? '#f59e0b' :
+                               solarFlare.class === 'C' ? '#eab308' : '#22c55e'
+                      }}
+                    >
+                      {solarFlare.class}{solarFlare.intensity.toFixed(1)}
                     </div>
-                  ) : null}
-                </div>
-                <div className="flex-1">
-                  <div className="text-gray-400 text-sm mb-1">Moon Phase</div>
-                  {loadingMoon ? (
-                    <div className="text-xl font-bold text-gray-400">Loading...</div>
-                  ) : moonPhase ? (
-                    <>
-                      <div className="text-2xl font-bold text-white mb-1">
-                        {moonPhase.phase}
-                      </div>
-                      <div className="text-sm text-gray-400">
-                        {moonPhase.illumination}% Illuminated
-                      </div>
-                    </>
-                  ) : null}
-                </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {new Date(solarFlare.time).toLocaleTimeString()}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-lg font-bold text-green-500">Quiet</div>
+                )}
               </div>
-            </div>
 
-            {/* KP Index Card */}
-            <div
-              onClick={() => router.push("/forecast")}
-              className="bg-gradient-to-br from-purple-900/40 to-blue-900/40 backdrop-blur-lg rounded-2xl p-6 cursor-pointer hover:scale-[1.02] transition-transform"
-            >
-              <div className="flex items-center gap-6">
-                <div className="flex-1">
-                  <div className="text-gray-400 text-sm mb-1">Current KP Index</div>
-                  <div className="flex items-end gap-2">
-                    {loadingKp ? (
-                      <div className="text-4xl font-bold text-gray-400">...</div>
-                    ) : (
-                      <>
-                        <div
-                          className="text-5xl font-bold"
-                          style={{ color: getKpColor(parseFloat(currentKp)) }}
-                        >
-                          {parseFloat(currentKp).toFixed(1)}
-                        </div>
-                        <div className="text-gray-400 text-sm mb-2">
-                          {parseFloat(currentKp) >= 5
-                            ? "High Activity"
-                            : parseFloat(currentKp) >= 3
-                            ? "Moderate"
-                            : "Low Activity"}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Solar Wind Data Card */}
-            <div
-              onClick={() => router.push("/solar-wind")}
-              className="bg-gradient-to-br from-blue-900/40 to-cyan-900/40 backdrop-blur-lg rounded-2xl p-6 cursor-pointer hover:scale-[1.02] transition-transform"
-            >
-              <div className="space-y-4">
-                {/* Bz Component */}
-                <div>
-                  <div className="text-gray-400 text-sm mb-1">Solar Wind Bz</div>
-                  <div className="flex items-end gap-2">
-                    {loadingBz ? (
-                      <div className="text-4xl font-bold text-gray-400">...</div>
-                    ) : currentBz !== null ? (
-                      <>
-                        <div
-                          className="text-4xl font-bold"
-                          style={{ color: getBzColor(currentBz) }}
-                        >
-                          {currentBz.toFixed(1)}
-                        </div>
-                        <div className="text-gray-400 text-sm mb-1">nT</div>
-                        <div className="text-sm text-gray-400 mb-1 ml-2">
-                          ({getBzStatus(currentBz)})
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-4xl font-bold text-gray-400">N/A</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Speed and Density */}
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
-                  <div>
-                    <div className="text-sm text-gray-500 mb-1">Speed</div>
-                    {loadingSolarWind ? (
-                      <div className="text-lg text-gray-400">...</div>
-                    ) : solarWindSpeed !== null ? (
-                      <>
-                        <div
-                          className="text-2xl font-bold"
-                          style={{ color: getSpeedColor(solarWindSpeed) }}
-                        >
-                          {solarWindSpeed.toFixed(0)} km/s
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {getSpeedStatus(solarWindSpeed)}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-lg text-gray-400">N/A</div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500 mb-1">Density</div>
-                    {loadingSolarWind ? (
-                      <div className="text-lg text-gray-400">...</div>
-                    ) : solarWindDensity !== null ? (
-                      <>
-                        <div
-                          className="text-2xl font-bold"
-                          style={{ color: getDensityColor(solarWindDensity) }}
-                        >
-                          {solarWindDensity.toFixed(1)} p/cm³
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {getDensityStatus(solarWindDensity)}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-lg text-gray-400">N/A</div>
-                    )}
-                  </div>
-                </div>
+              {/* Sunspot Number Card */}
+              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="text-xs text-gray-400 mb-1">Sunspot Number</div>
+                {loadingSunspot ? (
+                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                ) : (
+                  <>
+                    <div
+                      className="text-2xl font-bold"
+                      style={{
+                        color: sunspotNumber !== null ?
+                          (sunspotNumber >= 150 ? '#22c55e' :
+                           sunspotNumber >= 100 ? '#eab308' : '#ef4444') : '#666'
+                      }}
+                    >
+                      {sunspotNumber !== null ? sunspotNumber : '--'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {sunspotLastUpdated ? sunspotLastUpdated : ''}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
             {/* CME Alerts Card */}
-            <div
-              onClick={() => router.push("/cme-alerts")}
-              className="bg-gradient-to-br from-red-900/40 to-orange-900/40 backdrop-blur-lg rounded-2xl p-6 cursor-pointer hover:scale-[1.02] transition-transform"
-            >
-              <div className="space-y-4">
-                <div>
-                  <div className="text-gray-400 text-sm mb-1">CME Alerts</div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-3xl">☄️</span>
-                    {loadingCme ? (
-                      <div className="text-2xl font-bold text-gray-400">Loading...</div>
-                    ) : cmeData ? (
-                      <>
-                        <div
-                          className="text-2xl font-bold"
-                          style={{ color: getCmeColor(cmeData.speed) }}
-                        >
-                          {cmeData.type}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-2xl font-bold text-gray-400">N/A</div>
-                    )}
-                  </div>
-                  {cmeData && (
-                    <div className="text-sm text-gray-400">
-                      {getCmeStatus(cmeData.type, cmeData.speed)}
-                    </div>
-                  )}
+            {!loadingCme && cmeAlertsList.length > 0 && (
+              <div className="bg-gradient-to-br from-[#3d2020] to-[#2a1515] backdrop-blur-lg rounded-2xl p-6 border border-[#5a3030]/50">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">☄️</span>
+                  <span className="text-xl font-bold text-orange-200">CME Alerts</span>
+                  <span className="text-xs text-gray-400 ml-2">({cmeAlertsList.length} active)</span>
                 </div>
 
-                {cmeData?.speed && (
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
-                    <div>
-                      <div className="text-sm text-gray-500 mb-1">Speed</div>
-                      <div className="text-xl font-bold text-white">
-                        {cmeData.speed} km/s
+                <div className="space-y-3">
+                  {cmeAlertsList.map((cme, index) => {
+                    // Use minimum Kp for high priority check (e.g., "5-7" min is 5, "3-5" min is 3)
+                    const kpParts = cme.expectedKp.split('-');
+                    const minKp = parseInt(kpParts[0]);
+                    const isHighPriority = minKp >= 5 || cme.speed >= 700;
+
+                    return (
+                      <div
+                        key={index}
+                        className={`rounded-xl p-4 ${
+                          isHighPriority
+                            ? 'bg-[#4a2828]/60 border border-orange-500/40'
+                            : 'bg-black/20 border border-white/10'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          {/* Left side - CME Details */}
+                          <div className="flex-1 space-y-2">
+                            {/* Type */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-bold text-white">{cme.type}</span>
+                            </div>
+
+                            {/* Details - Vertical Layout */}
+                            <div className="space-y-1 text-sm">
+                              <div>
+                                <span className="text-gray-500">Detected:</span>
+                                <span className="text-gray-300 ml-2">
+                                  {(() => {
+                                    const date = new Date(cme.detectedAt);
+                                    const dateStr = date.toISOString().split('T')[0];
+                                    const timeStr = date.toISOString().split('T')[1].substring(0, 5);
+                                    return `${dateStr} @ ${timeStr} UT`;
+                                  })()}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Speed:</span>
+                                <span className="ml-2 font-medium text-gray-200">
+                                  {cme.speed} km/s {cme.speed >= 500 ? '🟢' : cme.speed >= 400 ? '🟡' : '🔴'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Expected Kp:</span>
+                                <span className="ml-2 font-medium text-gray-200">{cme.expectedKp}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right side - Predicted Arrival + Plan Hunt Button */}
+                          <div className="flex flex-col items-end">
+                            {isHighPriority && (
+                              <span className="text-red-400 text-xs font-bold mb-1">High Priority!</span>
+                            )}
+                            <div className="text-right mb-2">
+                              <div className="text-[10px] text-gray-500 uppercase">Predicted Arrival</div>
+                              <div className="text-orange-200 font-semibold">{cme.arrivalDate}</div>
+                            </div>
+                            {cme.speed >= 400 && (
+                              <button
+                                onClick={() => {
+                                  setActiveTab("aurora-intel");
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                className={`px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${
+                                  isHighPriority
+                                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black'
+                                    : 'bg-gradient-to-r from-rose-700 to-orange-700 hover:from-rose-600 hover:to-orange-600 text-white'
+                                }`}
+                              >
+                                Plan Hunt
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-500">
+                  High Priority: Minimum Kp 5+ expected or speed 700+ km/s
+                </div>
+              </div>
+            )}
+
+            {/* Solar Flare Insights Card */}
+            {!loadingFlare && solarFlare && (
+              <div className="bg-gradient-to-br from-[#2d2a15] to-[#1f1c10] backdrop-blur-lg rounded-2xl p-6 border border-yellow-900/40">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">⚡</span>
+                  <span className="text-xl font-bold text-yellow-200">Solar Flare Activity</span>
+                </div>
+
+                {(() => {
+                  const flareClass = solarFlare.class;
+                  const intensity = solarFlare.intensity;
+
+                  // Determine insight based on flare class
+                  let statusColor = "text-gray-400";
+                  let statusBg = "bg-gray-500/20 border-gray-500/30";
+                  let statusLabel = "Quiet";
+                  let insight = "Low solar activity. Aurora unlikely from current conditions.";
+                  let action = null;
+
+                  if (flareClass === "X") {
+                    statusColor = "text-red-400";
+                    statusBg = "bg-red-500/20 border-red-500/30";
+                    statusLabel = "High Alert";
+                    insight = "X-class flares often produce Earth-directed CMEs. Watch for CME announcement in the next few hours.";
+                    action = "Watch CME Alerts";
+                  } else if (flareClass === "M") {
+                    statusColor = "text-orange-400";
+                    statusBg = "bg-orange-500/20 border-orange-500/30";
+                    statusLabel = "Elevated";
+                    insight = intensity >= 5
+                      ? "Strong M-class flare may produce a CME. Monitor for potential CME activity."
+                      : "Moderate activity. M-class flares can occasionally produce CMEs.";
+                    action = intensity >= 5 ? "Monitor CME Alerts" : null;
+                  } else if (flareClass === "C") {
+                    statusColor = "text-yellow-400";
+                    statusBg = "bg-yellow-500/20 border-yellow-500/30";
+                    statusLabel = "Normal";
+                    insight = "Background solar activity. C-class flares rarely produce significant CMEs.";
+                  } else {
+                    statusLabel = "Quiet";
+                    insight = "Low solar activity. Aurora depends on existing CMEs or coronal hole streams.";
+                  }
+
+                  return (
+                    <div className={`rounded-xl p-4 border ${statusBg}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        {/* Left side - Flare Info */}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-3">
+                            <span className={`text-4xl font-bold ${
+                              flareClass === "X" ? "text-red-400" :
+                              flareClass === "M" ? "text-orange-400" :
+                              flareClass === "C" ? "text-yellow-400" :
+                              "text-gray-400"
+                            }`}>
+                              {flareClass}{intensity.toFixed(1)}
+                            </span>
+                            <span className={`text-xs font-bold px-2 py-1 rounded ${statusColor} ${statusBg}`}>
+                              {statusLabel}
+                            </span>
+                          </div>
+
+                          <p className="text-sm text-gray-300 mb-3">{insight}</p>
+
+                          <div className="text-xs text-gray-500">
+                            Last updated: {new Date(solarFlare.time).toLocaleString()}
+                          </div>
+                        </div>
+
+                        {/* Right side - Action hint */}
+                        {action && (
+                          <div className="flex flex-col items-end">
+                            <div className={`text-xs font-semibold ${statusColor} mb-1`}>
+                              {action}
+                            </div>
+                            <span className="text-2xl">👀</span>
+                          </div>
+                        )}
                       </div>
                     </div>
+                  );
+                })()}
+
+                <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-500">
+                  Solar flares can trigger CMEs. X-class + Earth-facing = potential aurora in 2-3 days.
+                </div>
+              </div>
+            )}
+
+            {/* High Speed Stream Prediction Card */}
+            {!loadingHss && hssPrediction && (
+              <div className="bg-gradient-to-br from-[#1a2035] to-[#151a2e] backdrop-blur-lg rounded-2xl p-6 border border-purple-500/30">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">🌀</span>
+                  <span className="text-xl font-bold text-purple-200">High Speed Stream Prediction</span>
+                </div>
+
+                {/* Main Prediction Card */}
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-5 mb-4">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    {/* Left - Date Window */}
                     <div>
-                      <div className="text-sm text-gray-500 mb-1">Arrival</div>
-                      <div className="text-xl font-bold text-white">
-                        {cmeData.arrivalTime || "TBD"}
+                      <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Aurora Window</div>
+                      <div className="text-2xl font-bold text-white">{hssPrediction.dateRange}</div>
+                      <div className="text-sm text-purple-300 mt-1">Peak: {hssPrediction.peakDate}</div>
+                    </div>
+                    {/* Right - Expected Kp */}
+                    <div className="text-right">
+                      <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Expected</div>
+                      <div className="text-2xl font-bold text-green-400">Kp {hssPrediction.expectedKp}</div>
+                      <div className="text-xs text-gray-400 mt-1">Moderate Storm</div>
+                    </div>
+                  </div>
+
+                  {/* Why This is Great */}
+                  <div className="bg-black/20 rounded-lg p-3 mb-4">
+                    <div className="text-xs font-semibold text-purple-300 mb-2">Why HSS is Perfect for Trip Planning:</div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-purple-500/10 rounded-lg p-2">
+                        <div className="text-lg">📅</div>
+                        <div className="text-[10px] text-gray-300">27-Day Cycle</div>
+                        <div className="text-[9px] text-gray-500">Predictable</div>
+                      </div>
+                      <div className="bg-purple-500/10 rounded-lg p-2">
+                        <div className="text-lg">🕐</div>
+                        <div className="text-[10px] text-gray-300">2-5 Day Window</div>
+                        <div className="text-[9px] text-gray-500">Flexible</div>
+                      </div>
+                      <div className="bg-purple-500/10 rounded-lg p-2">
+                        <div className="text-lg">✈️</div>
+                        <div className="text-[10px] text-gray-300">Book Ahead</div>
+                        <div className="text-[9px] text-gray-500">Plan Now!</div>
                       </div>
                     </div>
                   </div>
-                )}
 
-                <div className="text-xs text-gray-500 pt-2 border-t border-white/10">
-                  Lead time: 1-3 days • Action: Speed &gt;700 km/s = Plan hunt
-                </div>
-              </div>
-            </div>
-
-            {/* Solar Flares Card */}
-            <div
-              onClick={() => router.push("/solar-flares")}
-              className="bg-gradient-to-br from-yellow-900/40 to-amber-900/40 backdrop-blur-lg rounded-2xl p-6 cursor-pointer hover:scale-[1.02] transition-transform"
-            >
-              <div className="space-y-4">
-                <div>
-                  <div className="text-gray-400 text-sm mb-1">Solar Flares</div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-3xl">⚡</span>
-                    {loadingFlare ? (
-                      <div className="text-2xl font-bold text-gray-400">Loading...</div>
-                    ) : solarFlare ? (
-                      <>
-                        <div
-                          className="text-4xl font-bold"
-                          style={{ color: getFlareColor(solarFlare.class) }}
-                        >
-                          {solarFlare.class}{solarFlare.intensity.toFixed(1)}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-2xl font-bold text-gray-400">N/A</div>
-                    )}
+                  {/* 27-Day Reference */}
+                  <div className="text-xs text-gray-400 flex items-center gap-2">
+                    <span>🔄</span>
+                    <span>Previous HSS: {hssPrediction.previousHssDate} → Coronal holes recur every ~27 days</span>
                   </div>
-                  {solarFlare && (
-                    <div className="text-sm text-gray-400">
-                      {getFlareStatus(solarFlare.class)}
-                    </div>
-                  )}
                 </div>
 
-                <div className="text-xs text-gray-500 pt-2 border-t border-white/10">
-                  <div className="mb-1">
-                    Classification: A &lt; B &lt; C &lt; M &lt; X (each 10× stronger)
+                {/* Recommended Destinations */}
+                <div className="mb-4">
+                  <div className="text-sm font-semibold text-white mb-2">🎯 Best Destinations for Kp {hssPrediction.expectedKp}</div>
+                  <div className="text-xs text-gray-400 mb-3">
+                    Kp 4-6 is visible from 60-65°N latitude. Recommended locations:
                   </div>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {["Tromsø, Norway", "Reykjavik, Iceland", "Rovaniemi, Finland", "Abisko, Sweden", "Fairbanks, Alaska"].map((dest) => (
+                      <span key={dest} className="text-xs bg-purple-500/20 text-purple-200 px-2 py-1 rounded-full">
+                        {dest}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Trip Planning CTAs */}
+                <div className="space-y-3">
+                  {/* Flights */}
                   <div>
-                    X-class + Earth-facing = Watch for CME in 2-3 days
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Coronal Holes Card */}
-            <div
-              onClick={() => router.push("/coronal-holes")}
-              className="bg-gradient-to-br from-violet-900/40 to-fuchsia-900/40 backdrop-blur-lg rounded-2xl p-6 cursor-pointer hover:scale-[1.02] transition-transform"
-            >
-              <div className="space-y-4">
-                <div>
-                  <div className="text-gray-400 text-sm mb-1">Coronal Holes</div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-3xl">🕳️</span>
-                    {loadingCoronalHole ? (
-                      <div className="text-2xl font-bold text-gray-400">Loading...</div>
-                    ) : coronalHole ? (
-                      <>
-                        <div className="text-2xl font-bold text-white">
-                          {coronalHole.size}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-2xl font-bold text-gray-400">N/A</div>
-                    )}
-                  </div>
-                  {coronalHole && (
-                    <div className="text-sm text-gray-400">
-                      Arrival: {coronalHole.arrivalEstimate}
+                    <div className="text-sm font-semibold text-white mb-2">✈️ Find Flights</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <a
+                        href="https://www.trip.com/t/YzYLsf5i7S2"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white text-xs font-bold rounded-lg transition-all text-center"
+                      >
+                        Trip.com
+                      </a>
+                      <a
+                        href="https://www.skyscanner.com/flights"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-white text-xs font-bold rounded-lg transition-all text-center"
+                      >
+                        Skyscanner
+                      </a>
+                      <a
+                        href="https://www.agoda.com/flights"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white text-xs font-bold rounded-lg transition-all text-center"
+                      >
+                        Agoda
+                      </a>
                     </div>
-                  )}
-                </div>
-
-                <div className="text-xs text-gray-500 pt-2 border-t border-white/10">
-                  <div className="mb-1">
-                    Predictable every ~27 days • Usually Kp 4-6 range
                   </div>
+
+                  {/* Accommodation */}
                   <div>
-                    Duration: 2-5 days • Great for planning multi-day trips
+                    <div className="text-sm font-semibold text-white mb-2">🏨 Book Accommodation</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <a
+                        href="https://www.trip.com/t/xqQysf5i7S5"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white text-xs font-bold rounded-lg transition-all text-center"
+                      >
+                        Trip.com
+                      </a>
+                      <a
+                        href="https://www.agoda.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white text-xs font-bold rounded-lg transition-all text-center"
+                      >
+                        Agoda
+                      </a>
+                      <a
+                        href="https://www.expedia.com/Hotels"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-black text-xs font-bold rounded-lg transition-all text-center"
+                      >
+                        Expedia
+                      </a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Info Card */}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
-              <div className="flex gap-3">
-                <svg
-                  className="w-6 h-6 text-blue-400 flex-shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <div className="text-sm text-gray-300">
-                  <p className="font-semibold text-white mb-2">
-                    Understanding Aurora Conditions:
-                  </p>
-                  <p className="mb-2">
-                    <span className="text-aurora-green">Moon Phase:</span> Lower illumination provides darker skies for better aurora viewing
-                  </p>
-                  <p className="mb-2">
-                    <span className="text-aurora-green">KP Index:</span> Higher values indicate stronger geomagnetic activity and better aurora potential
-                  </p>
-                  <p className="mb-2">
-                    <span className="text-aurora-green">Solar Wind Bz:</span> Negative (southward) Bz values are favorable for aurora formation
-                  </p>
-                  <p className="mb-2">
-                    <span className="text-aurora-green">CME Alerts:</span> Earth-directed CMEs with speed &gt;700 km/s = Plan hunt for arrival day ± 1 day
-                  </p>
-                  <p className="mb-2">
-                    <span className="text-aurora-green">Solar Flares:</span> X-class flares often launch CMEs - prepare for hunt in 2-3 days
-                  </p>
-                  <p>
-                    <span className="text-aurora-green">Coronal Holes:</span> Predictable moderate activity every ~27 days, great for planning trips
-                  </p>
+                <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-500">
+                  HSS from coronal holes provide predictable, multi-day aurora windows - perfect for trip planning!
                 </div>
               </div>
-            </div>
+            )}
+
           </div>
         </div>
       )}
@@ -2860,7 +3812,85 @@ export default function IntelligencePage() {
             {/* Aurora Intelligence - Real-time Decision System */}
             <div className="space-y-4">
               <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-3xl font-bold text-white">Aurora Intelligence</h2>
+                <h2 className="text-3xl font-bold text-white">🚀 Aurora Intelligence Advisor</h2>
+              </div>
+
+              {/* Tab Navigation Cards - 3 Column Grid */}
+              <div className="grid grid-cols-3 gap-3">
+                {/* Aurora Forecast - Links to Cosmic Tab */}
+                <button
+                  onClick={() => setActiveTab("cosmic")}
+                  className="bg-gradient-to-br from-purple-900/40 to-indigo-900/40 rounded-xl p-4 border border-purple-500/30 hover:scale-[1.02] hover:border-purple-400/50 transition-all"
+                >
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="text-5xl">🌠</span>
+                    <h3 className="text-sm font-bold text-white">Aurora Forecast</h3>
+                  </div>
+                </button>
+
+                {/* Aurora Now - Links to Aurora Tab */}
+                <button
+                  onClick={() => setActiveTab("aurora-intel")}
+                  className="bg-gradient-to-br from-emerald-900/40 to-teal-900/40 rounded-xl p-4 border border-emerald-500/30 hover:scale-[1.02] hover:border-emerald-400/50 transition-all"
+                >
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="text-5xl">🌍</span>
+                    <h3 className="text-sm font-bold text-white">Aurora Now</h3>
+                  </div>
+                </button>
+
+                {/* Cloud Intel - Links to Cloud Tab */}
+                <button
+                  onClick={() => setActiveTab("cloud")}
+                  className="bg-gradient-to-br from-blue-900/40 to-cyan-900/40 rounded-xl p-4 border border-blue-500/30 hover:scale-[1.02] hover:border-blue-400/50 transition-all"
+                >
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="text-5xl">☁️</span>
+                    <h3 className="text-sm font-bold text-white">Cloud Intel</h3>
+                  </div>
+                </button>
+              </div>
+
+              {/* External Links - 3 Column Grid */}
+              <div className="grid grid-cols-3 gap-3">
+                {/* Solar Data */}
+                <a
+                  href="https://www.solarham.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-xl p-4 border border-slate-600/30 hover:scale-[1.02] transition-transform"
+                >
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="text-5xl">☀️</span>
+                    <h3 className="text-sm font-bold text-white">Solar Data</h3>
+                  </div>
+                </a>
+
+                {/* Light Data */}
+                <a
+                  href="https://lightpollutionmap.app/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-xl p-4 border border-slate-600/30 hover:scale-[1.02] transition-transform"
+                >
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="text-5xl">🗺️</span>
+                    <h3 className="text-sm font-bold text-white">Light Data</h3>
+                  </div>
+                </a>
+
+                {/* Cloud Data */}
+                <a
+                  href="https://zoom.earth/maps/satellite/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-xl p-4 border border-slate-600/30 hover:scale-[1.02] transition-transform"
+                >
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="text-5xl">🛰️</span>
+                    <h3 className="text-sm font-bold text-white">Cloud Data</h3>
+                  </div>
+                </a>
               </div>
 
               {/* Three Gates - Vertical Stack */}
@@ -2923,7 +3953,28 @@ export default function IntelligencePage() {
                           {/* Example Cities */}
                           {verdict.exampleCities && verdict.exampleCities.length > 0 && (
                             <div className="text-xs text-green-300/80 mb-1">
-                              Visible from: {verdict.exampleCities.join(", ")}
+                              Visible from: {verdict.exampleCities.map(city => {
+                                // Country to flag mapping
+                                const countryFlags: Record<string, string> = {
+                                  "Norway": "🇳🇴",
+                                  "Iceland": "🇮🇸",
+                                  "Alaska": "🇺🇸",
+                                  "Canada": "🇨🇦",
+                                  "Sweden": "🇸🇪",
+                                  "Finland": "🇫🇮",
+                                  "Russia": "🇷🇺",
+                                  "UK": "🇬🇧",
+                                  "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+                                  "USA": "🇺🇸",
+                                  "China": "🇨🇳",
+                                };
+                                // Parse "City, Country" format
+                                const parts = city.split(", ");
+                                const cityName = parts[0];
+                                const country = parts[1] || "";
+                                const flag = countryFlags[country] || "🌍";
+                                return `${flag} ${cityName}`;
+                              }).join(", ")}
                             </div>
                           )}
 
@@ -2943,6 +3994,37 @@ export default function IntelligencePage() {
                             </div>
                           </div>
                         </div>
+
+                        {/* Aurora Characteristics - Only show when there's activity */}
+                        {verdict.intensityScore > 10 && verdict.auroraType && (
+                          <div className="bg-purple-500/10 rounded-lg p-3 mb-3 border border-purple-500/30">
+                            <div>
+                              <div className="text-xs text-gray-400 uppercase mb-2">Expected Aurora Characteristics</div>
+                                <div className="space-y-1 text-sm">
+                                  <div>
+                                    <span className="text-gray-400">Type:</span>
+                                    <span className="text-white ml-2">{verdict.auroraType}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400">Duration:</span>
+                                    <span className="text-white ml-2">{verdict.durationHours}h</span>
+                                  </div>
+                                  {verdict.auroraColors && (
+                                    <div>
+                                      <span className="text-gray-400">Colors:</span>
+                                      <span className="text-white ml-2">{verdict.auroraColors}</span>
+                                    </div>
+                                  )}
+                                  {verdict.auroraStructure && (
+                                    <div>
+                                      <span className="text-gray-400">Structure:</span>
+                                      <span className="text-white ml-2">{verdict.auroraStructure}</span>
+                                    </div>
+                                  )}
+                                </div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Physics Validation */}
                         {verdict.physicsFlag !== "✅ PHYSICALLY VALID" && (
@@ -2992,6 +4074,16 @@ export default function IntelligencePage() {
                             <span className="text-xs text-gray-400">Density</span>
                             <span className="text-sm font-bold" style={{ color: getDensityColor(density) }}>{density.toFixed(1)} p/cm³</span>
                           </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-400">Hemisphere Power</span>
+                            {hemispherePower ? (
+                              <span className="text-sm font-bold" style={{ color: getHemispherePowerColor(hemispherePower.north) }}>
+                                {hemispherePower.north} GW
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-500">Loading...</span>
+                            )}
+                          </div>
 
                           {/* Kp Lag Warning */}
                           {kpLagWarning && kpLagWarning.isLagging && (
@@ -3004,48 +4096,67 @@ export default function IntelligencePage() {
                             </div>
                           )}
 
-                          {/* Bz History with Thresholds */}
+                          {/* Bz History Chart */}
                           <div className="pt-2 border-t border-white/10 space-y-2">
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-gray-400">Bz History (90min)</span>
-                              <div className="flex items-center gap-2">
-                                {bzHistory ? (
-                                  <>
-                                    <span className={`text-sm font-bold ${
-                                      bzHistory.isSustained90 ? 'text-green-400' :
-                                      bzHistory.isSustained45 ? 'text-yellow-400' :
-                                      bzHistory.isSustained15 ? 'text-orange-400' :
-                                      'text-gray-400'
-                                    }`}>
-                                      {bzHistory.minutesSouth}min south
-                                    </span>
-                                    <span className="text-base">
-                                      {bzHistory.isSustained90 ? '🔥' :
-                                       bzHistory.isSustained45 ? '⚡' :
-                                       bzHistory.isSustained15 ? '⏳' : '😴'}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-gray-500">Loading...</span>
-                                )}
-                              </div>
-                            </div>
-                            {bzHistory && (
-                              <div className="text-xs space-y-1">
-                                <div className="flex justify-between text-gray-400">
-                                  <span>15min: {bzHistory.isSustained15 ? '✅' : '❌'}</span>
-                                  <span>45min: {bzHistory.isSustained45 ? '✅' : '❌'}</span>
-                                  <span>90min: {bzHistory.isSustained90 ? '✅' : '❌'}</span>
-                                </div>
-                                <div className="flex justify-between text-gray-400">
-                                  <span>Trend: <span className={`font-bold ${
-                                    bzHistory.bzTrend === 'strengthening' ? 'text-green-400' :
-                                    bzHistory.bzTrend === 'weakening' ? 'text-red-400' :
-                                    'text-gray-300'
-                                  }`}>{bzHistory.bzTrend}</span></span>
+                              {bzHistory && (
+                                <div className="flex items-center gap-2 text-xs text-gray-400">
+                                  <span className="text-green-400">{bzHistory.minutesSouth}min south</span>
                                   <span>Min: {bzHistory.minBz.toFixed(1)} nT</span>
                                 </div>
+                              )}
+                            </div>
+                            {bzHistory && bzHistory.readings.length > 0 && (
+                              <div className="relative h-16 bg-black/30 rounded-lg overflow-hidden">
+                                {/* Center line (Bz = 0) */}
+                                <div className="absolute left-0 right-0 top-1/2 h-px bg-gray-600" />
+                                {/* Labels */}
+                                <div className="absolute left-1 top-1 text-[10px] text-red-400/60">+North</div>
+                                <div className="absolute left-1 bottom-1 text-[10px] text-green-400/60">−South</div>
+                                {/* Dots */}
+                                <svg className="w-full h-full" preserveAspectRatio="none">
+                                  {bzHistory.readings.map((bz, i) => {
+                                    const x = (i / (bzHistory.readings.length - 1)) * 100;
+                                    // Scale: -20 to +20 nT range, clamped
+                                    const clampedBz = Math.max(-20, Math.min(20, bz));
+                                    // y: 50% is center, negative goes down (good), positive goes up (bad)
+                                    const y = 50 - (clampedBz / 20) * 45;
+                                    const color = bz >= 0 ? '#ef4444' : bz > -4 ? '#eab308' : '#22c55e';
+                                    return (
+                                      <circle
+                                        key={i}
+                                        cx={`${x}%`}
+                                        cy={`${y}%`}
+                                        r="2"
+                                        fill={color}
+                                        opacity={0.8}
+                                      />
+                                    );
+                                  })}
+                                </svg>
                               </div>
+                            )}
+                          </div>
+
+                          {/* Bz Trend */}
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-400">Bz Trend</span>
+                            {bzHistory ? (
+                              <span className={`text-sm font-bold capitalize ${
+                                // Positive Bz = no aurora, always red
+                                bz >= 0 ? 'text-red-400' :
+                                // Negative & strengthening (more negative) = great
+                                bzHistory.bzTrend === 'strengthening' ? 'text-green-400' :
+                                // Negative & stable = still good
+                                bzHistory.bzTrend === 'stable' ? 'text-green-400' :
+                                // Negative but weakening (toward 0) = fading
+                                'text-yellow-400'
+                              }`}>
+                                {bz >= 0 ? 'positive' : bzHistory.bzTrend}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-500">Loading...</span>
                             )}
                           </div>
 
@@ -3100,135 +4211,74 @@ export default function IntelligencePage() {
                               </div>
                             )}
                           </div>
+
+                          {/* What's Coming - 30-60 min Forecast */}
+                          <div className="pt-2 border-t border-white/10 space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-400">What&apos;s Coming</span>
+                              <span className="text-xs text-gray-500">in ~{speed > 0 ? Math.round(1500000 / speed / 60) : '--'} min</span>
+                            </div>
+                            {(() => {
+                              const transitMin = speed > 0 ? Math.round(1500000 / speed / 60) : 45;
+                              const arrivalTime = new Date(Date.now() + transitMin * 60 * 1000);
+                              const timeStr = arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                              // Determine forecast based on current L1 readings
+                              if (currentBz !== null && currentBz <= -5 && bzHistory?.bzTrend === 'strengthening') {
+                                return (
+                                  <div className="bg-green-500/20 border border-green-500/40 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-green-300 mb-1">🟢 Aurora likely improving</div>
+                                    <p className="text-xs text-green-200">
+                                      Strong southward Bz ({currentBz?.toFixed(1)} nT) heading to Earth.
+                                      <span className="block mt-1 font-semibold">→ Be ready by {timeStr}</span>
+                                    </p>
+                                  </div>
+                                );
+                              } else if (currentBz !== null && currentBz <= -3) {
+                                return (
+                                  <div className="bg-green-500/15 border border-green-500/30 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-green-300 mb-1">🟢 Good conditions incoming</div>
+                                    <p className="text-xs text-green-200">
+                                      Southward Bz ({currentBz?.toFixed(1)} nT) will reach Earth soon.
+                                      <span className="block mt-1 font-semibold">→ Check again at {timeStr}</span>
+                                    </p>
+                                  </div>
+                                );
+                              } else if (currentBz !== null && currentBz >= 0 && bzHistory?.bzTrend === 'weakening') {
+                                return (
+                                  <div className="bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-yellow-300 mb-1">🟡 Conditions fading</div>
+                                    <p className="text-xs text-yellow-200">
+                                      Bz turning north at L1 — aurora may weaken.
+                                      <span className="block mt-1 font-semibold">→ Go out NOW if skies are clear</span>
+                                    </p>
+                                  </div>
+                                );
+                              } else if (currentBz !== null && currentBz >= 2) {
+                                return (
+                                  <div className="bg-red-500/15 border border-red-500/30 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-red-300 mb-1">🔴 Quiet conditions ahead</div>
+                                    <p className="text-xs text-red-200">
+                                      Northward Bz (+{currentBz?.toFixed(1)} nT) — not favorable for aurora.
+                                      <span className="block mt-1 font-semibold">→ Check back later or monitor CME alerts</span>
+                                    </p>
+                                  </div>
+                                );
+                              } else {
+                                return (
+                                  <div className="bg-gray-500/15 border border-gray-500/30 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-gray-300 mb-1">⚪ Uncertain conditions</div>
+                                    <p className="text-xs text-gray-300">
+                                      Bz near zero ({currentBz?.toFixed(1)} nT) — could go either way.
+                                      <span className="block mt-1 font-semibold">→ Monitor Bz trend for changes</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                            })()}
+                          </div>
                         </div>
 
-                        {/* CME Alerts Section - displays upcoming CMEs */}
-                        {!loadingCme && cmeAlertsList.length > 0 && (() => {
-                          // Group CMEs by arrival date
-                          const groupedByDate = cmeAlertsList.reduce((acc, alert) => {
-                            if (!acc[alert.arrivalDate]) {
-                              acc[alert.arrivalDate] = [];
-                            }
-                            acc[alert.arrivalDate].push(alert);
-                            return acc;
-                          }, {} as Record<string, typeof cmeAlertsList>);
-
-                          // Create consolidated alerts (one per date)
-                          const consolidatedAlerts = Object.entries(groupedByDate).map(([date, alerts]) => {
-                            // Extract Kp ranges
-                            const kpValues = alerts.map(a => {
-                              const parts = a.expectedKp.split('-');
-                              return { min: parseInt(parts[0]), max: parseInt(parts[parts.length - 1]) };
-                            });
-                            const minKp = Math.min(...kpValues.map(k => k.min));
-                            const maxKp = Math.max(...kpValues.map(k => k.max));
-                            const kpRange = minKp === maxKp ? `${minKp}` : `${minKp}-${maxKp}`;
-
-                            // Speed range
-                            const speeds = alerts.map(a => a.speed);
-                            const minSpeed = Math.min(...speeds);
-                            const maxSpeed = Math.max(...speeds);
-
-                            // Get unique types
-                            const types = [...new Set(alerts.map(a => a.type))];
-                            const typeDisplay = types.length === 1 ? types[0] : types.join(', ');
-
-                            return {
-                              date,
-                              kpRange,
-                              minKp,
-                              maxKp,
-                              minSpeed,
-                              maxSpeed,
-                              typeDisplay,
-                              count: alerts.length
-                            };
-                          });
-
-                          // Traffic light color system based on max Kp
-                          const getTrafficLightColors = (maxKp: number) => {
-                            if (maxKp >= 7) {
-                              // Red - High severity
-                              return {
-                                bg: 'bg-red-500/10',
-                                border: 'border-red-500/30',
-                                dateText: 'text-red-200',
-                                kpText: 'text-red-300'
-                              };
-                            } else if (maxKp >= 5) {
-                              // Yellow/Amber - Moderate severity
-                              return {
-                                bg: 'bg-yellow-500/10',
-                                border: 'border-yellow-500/30',
-                                dateText: 'text-yellow-200',
-                                kpText: 'text-yellow-300'
-                              };
-                            } else {
-                              // Green - Low severity
-                              return {
-                                bg: 'bg-green-500/10',
-                                border: 'border-green-500/30',
-                                dateText: 'text-green-200',
-                                kpText: 'text-green-300'
-                              };
-                            }
-                          };
-
-                          return (
-                            <div className="mt-4 pt-4 border-t border-white/20">
-                              <div className="flex items-center gap-2 mb-3">
-                                <span className="text-sm font-bold text-orange-300">☄️ CME Alerts</span>
-                              </div>
-                              <div className="space-y-2">
-                                {consolidatedAlerts.map((alert, index) => {
-                                  const colors = getTrafficLightColors(alert.maxKp);
-                                  return (
-                                    <div key={index} className={`${colors.bg} border ${colors.border} rounded-lg p-3`}>
-                                      <div className="flex justify-between items-center mb-2">
-                                        <span className={`text-xs font-bold ${colors.dateText}`}>{alert.date}</span>
-                                        <span className={`text-xs font-bold ${colors.kpText}`}>Kp {alert.kpRange}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center mb-1">
-                                        <span className="text-xs text-gray-400">Type</span>
-                                        <span className="text-xs font-bold text-white">{alert.typeDisplay}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center">
-                                        <span className="text-xs text-gray-400">Speed</span>
-                                        <span className="text-xs font-bold" style={{ color: getCmeColor(alert.maxSpeed) }}>
-                                          {alert.minSpeed === alert.maxSpeed
-                                            ? `${alert.minSpeed} km/s`
-                                            : `${alert.minSpeed} - ${alert.maxSpeed} km/s`}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })()}
-
-                        {/* HSS Prediction Section */}
-                        {!loadingHss && hssPrediction && (
-                          <div className="mt-4 pt-4 border-t border-white/20">
-                            <div className="flex items-center gap-2 mb-3">
-                              <span className="text-sm font-bold text-purple-300">🕳️ High Speed Stream Prediction</span>
-                            </div>
-                            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-                              <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs font-bold text-purple-200">Peak: {hssPrediction.peakDate}</span>
-                                <span className="text-xs font-bold text-yellow-300">Kp {hssPrediction.expectedKp}</span>
-                              </div>
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs text-gray-400">Expected Range</span>
-                                <span className="text-xs font-bold text-white">{hssPrediction.dateRange}</span>
-                              </div>
-                              <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-white/10">
-                                Based on 27-day solar rotation cycle
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </>
                     );
                   })()}
@@ -3449,7 +4499,9 @@ export default function IntelligencePage() {
                     // Step 4: Hierarchical Verdict Logic (Priority-based)
                     let gate2Verdict = "POOR";
                     let gate2Message = "";
-                    const hasClearSkiesNearby = locationRecommendations.length > 0;
+                    // Check if any nearby location has significantly better conditions (clear or 20%+ improvement)
+                    const hasClearSkiesNearby = locationRecommendations.length > 0 &&
+                      locationRecommendations.some((rec: any) => rec.cloudCoverAtArrival < 40 || (rec.improvement && rec.improvement >= 20));
 
                     // Get latitude visibility for priority check
                     const kp = parseFloat(currentKp);
@@ -3547,7 +4599,7 @@ export default function IntelligencePage() {
                         <div className={`${!huntLocationCoords ? 'bg-gray-700/50' : gate2Color} border-2 rounded-lg p-4 text-center mb-3 h-[100px] flex items-center justify-center`}>
                           {!huntLocationCoords ? (
                             <div className="text-sm text-gray-300 italic leading-tight">
-                              Enter your aurora hunting location for viewing conditions
+                              Enter your current location for viewing conditions
                             </div>
                           ) : (
                             <div className={`text-xl font-bold ${gate2TextColor} leading-tight px-2`}>
@@ -3565,62 +4617,92 @@ export default function IntelligencePage() {
 
                         {/* Hunt Location Input */}
                         <div
-                          className="mb-4 pb-4 border-b border-white/20"
+                          className="mb-4 pb-4 border-b border-white/20 bg-gradient-to-br from-blue-900/40 to-indigo-900/40 backdrop-blur-lg rounded-2xl p-4 border-2 border-blue-500/30"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <label className="block text-xs text-gray-400 mb-2">
-                            Hunt Location
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={huntLocation}
-                              onChange={(e) => {
-                                setHuntLocation(e.target.value);
-                                if (e.target.value.length >= 3) {
-                                  fetchHuntLocationSuggestions(e.target.value);
-                                } else {
-                                  setShowHuntLocationSuggestions(false);
-                                }
-                              }}
-                              onFocus={() => {
-                                if (huntLocationSuggestions.length > 0) {
-                                  setShowHuntLocationSuggestions(true);
-                                }
-                              }}
-                              onBlur={() => {
-                                setTimeout(() => setShowHuntLocationSuggestions(false), 200);
-                              }}
-                              placeholder="e.g., Tromsø, Norway"
-                              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              autoComplete="off"
-                            />
-
-                            {showHuntLocationSuggestions && huntLocationSuggestions.length > 0 && (
-                              <div className="hunt-location-autocomplete absolute z-50 w-full mt-1 bg-gray-800 border border-white/20 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                                {huntLocationSuggestions.map((suggestion: any, idx: number) => (
-                                  <div
-                                    key={idx}
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      selectHuntLocationSuggestion(suggestion);
-                                    }}
-                                    className="px-3 py-2 hover:bg-white/10 cursor-pointer text-sm text-white border-b border-white/10 last:border-b-0"
-                                  >
-                                    {suggestion.display_name}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                          <div className="flex items-center gap-3 mb-3">
+                            <span className="text-2xl">📍</span>
+                            <div className="flex-1">
+                              <h3 className="text-sm font-bold text-white">Your Location</h3>
+                              <p className="text-xs text-gray-400">Your Current Location</p>
+                            </div>
+                            <button
+                              onClick={handleGetHuntLocationGPS}
+                              disabled={gettingGPSLocation}
+                              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                            >
+                              {gettingGPSLocation ? (
+                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                              )}
+                              <span>Detect</span>
+                            </button>
                           </div>
 
-                          <button
-                            onClick={handleGetHuntLocationGPS}
-                            disabled={gettingGPSLocation}
-                            className="mt-2 w-full px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 rounded-lg text-xs text-blue-300 transition-colors disabled:opacity-50"
-                          >
-                            {gettingGPSLocation ? "Getting location..." : "📍 Use my current location"}
-                          </button>
+                          <div className="relative flex gap-2">
+                            <div className="flex-1 relative">
+                              <input
+                                type="text"
+                                value={huntLocation}
+                                onChange={(e) => handleHuntLocationChange(e.target.value)}
+                                onKeyDown={handleHuntLocationKeyDown}
+                                onFocus={() => {
+                                  if (huntLocationSuggestions.length > 0) setShowHuntLocationSuggestions(true);
+                                }}
+                                placeholder="e.g., Tromsø, Norway"
+                                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                autoComplete="off"
+                              />
+
+                              {loadingHuntLocationSuggestions && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                                </div>
+                              )}
+
+                              {/* Autocomplete Dropdown */}
+                              {showHuntLocationSuggestions && huntLocationSuggestions.length > 0 && (
+                                <div className="hunt-location-autocomplete absolute z-[9999] w-full mt-1 bg-[#1a1f2e] border border-white/20 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                  {huntLocationSuggestions.map((suggestion: any, idx: number) => (
+                                    <div
+                                      key={idx}
+                                      onClick={() => selectHuntLocationSuggestion(suggestion)}
+                                      className={`px-3 py-2 cursor-pointer text-sm text-white border-b border-white/10 last:border-b-0 ${
+                                        idx === huntLocationSelectedIndex
+                                          ? "bg-blue-600/40"
+                                          : "hover:bg-white/10"
+                                      }`}
+                                    >
+                                      <div className="font-medium">{suggestion.name}</div>
+                                      <div className="text-xs text-gray-400">
+                                        {suggestion.admin1 && `${suggestion.admin1}, `}{suggestion.country}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {showHuntLocationSuggestions && !loadingHuntLocationSuggestions && huntLocationSuggestions.length === 0 && huntLocation.length >= 2 && (
+                                <div className="hunt-location-autocomplete absolute z-[9999] w-full mt-1 bg-[#1a1f2e] border border-white/20 rounded-lg shadow-xl p-3">
+                                  <p className="text-gray-400 text-sm text-center">
+                                    No locations found. Try a different search.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={handleHuntLocationSubmit}
+                              disabled={!huntLocation.trim() || loadingHuntLocationData}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors"
+                            >
+                              {loadingHuntLocationData ? "..." : "Get"}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Data metrics below */}
@@ -3633,6 +4715,7 @@ export default function IntelligencePage() {
                                 const huntLat = huntLocationCoords?.lat || 0;
                                 const visibility = canSeeAuroraAtLatitude(huntLat, kp);
                                 const absLat = Math.abs(huntLat).toFixed(1);
+                                const isAuroraPossible = visibility.minKpRequired !== null;
 
                                 let visibilityStatus = "";
                                 let visibilityColor = "";
@@ -3656,72 +4739,79 @@ export default function IntelligencePage() {
                                 }
 
                                 return (
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-400">Latitude ({absLat}°)</span>
-                                    <div className="flex items-center gap-2">
-                                      <span className={`text-sm font-bold ${visibilityColor}`}>
-                                        {visibilityStatus}
-                                      </span>
-                                      <span className="text-base">{visibilityEmoji}</span>
+                                  <>
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-xs text-gray-400">Latitude ({absLat}°)</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`text-sm font-bold ${visibilityColor}`}>
+                                          {visibilityStatus}
+                                        </span>
+                                        <span className="text-base">{visibilityEmoji}</span>
+                                      </div>
                                     </div>
-                                  </div>
+
+                                    {/* Only show sky condition metrics if aurora is possible at this latitude */}
+                                    {isAuroraPossible && (
+                                      <>
+                                        {/* 2. Daylight */}
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-xs text-gray-400">Daylight</span>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold text-white">
+                                              {daylightStatus === "Day" && sunsetTime
+                                                ? `Sunset at ${sunsetTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`
+                                                : daylightStatus || "Unknown"}
+                                            </span>
+                                            <span className="text-lg">{getDaylightEmoji(daylightStatus)}</span>
+                                          </div>
+                                        </div>
+
+                                        {/* 3. Cloud Cover */}
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-xs text-gray-400">Cloud Cover</span>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold" style={{ color: getCloudCoverColor(cloudCover || 0) }}>{cloudCover}%</span>
+                                            <span className="text-lg">{getCloudCoverEmoji(cloudCover || 0, daylightStatus)}</span>
+                                          </div>
+                                        </div>
+
+                                        {/* 4. Bortle Class */}
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-xs text-gray-400">Bortle Class</span>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold text-white">{bortleClass}</span>
+                                            <span className="text-base">{getBortleEmoji(bortleClass || 5)}</span>
+                                          </div>
+                                        </div>
+
+                                        {/* 5. Moon Phase */}
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-xs text-gray-400">Moon Phase</span>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold text-white">{illumination}%</span>
+                                            {moonPhase && (
+                                              <span className="text-2xl">
+                                                {(() => {
+                                                  const phase = moonPhase.phase.toLowerCase();
+                                                  if (phase.includes('new moon')) return "🌑";
+                                                  if (phase.includes('waxing crescent')) return "🌒";
+                                                  if (phase.includes('first quarter')) return "🌓";
+                                                  if (phase.includes('waxing gibbous')) return "🌔";
+                                                  if (phase.includes('full moon')) return "🌕";
+                                                  if (phase.includes('waning gibbous')) return "🌖";
+                                                  if (phase.includes('last quarter') || phase.includes('third quarter')) return "🌗";
+                                                  if (phase.includes('waning crescent')) return "🌘";
+                                                  return "🌑";
+                                                })()}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </>
+                                    )}
+                                  </>
                                 );
                               })()}
-
-                              {/* 2. Daylight */}
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-400">Daylight</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-white">
-                                    {daylightStatus === "Day" && sunsetTime
-                                      ? `Sunset at ${sunsetTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`
-                                      : daylightStatus || "Unknown"}
-                                  </span>
-                                  <span className="text-lg">{getDaylightEmoji(daylightStatus)}</span>
-                                </div>
-                              </div>
-
-                              {/* 3. Cloud Cover */}
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-400">Cloud Cover</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold" style={{ color: gate2Verdict === "YOU'RE TOO FAR FROM THE POLES!" ? "white" : getCloudCoverColor(cloudCover || 0) }}>{cloudCover}%</span>
-                                  <span className="text-lg">{getCloudCoverEmoji(cloudCover || 0, daylightStatus)}</span>
-                                </div>
-                              </div>
-
-                              {/* 4. Bortle Class */}
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-400">Bortle Class</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-white">{bortleClass}</span>
-                                  <span className="text-base">{getBortleEmoji(bortleClass || 5)}</span>
-                                </div>
-                              </div>
-
-                              {/* 5. Moon Phase */}
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-400">Moon Phase</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-white">{illumination}%</span>
-                                  {moonPhase && (
-                                    <span className="text-2xl">
-                                      {(() => {
-                                        const phase = moonPhase.phase.toLowerCase();
-                                        if (phase.includes('new moon')) return "🌑";
-                                        if (phase.includes('waxing crescent')) return "🌒";
-                                        if (phase.includes('first quarter')) return "🌓";
-                                        if (phase.includes('waxing gibbous')) return "🌔";
-                                        if (phase.includes('full moon')) return "🌕";
-                                        if (phase.includes('waning gibbous')) return "🌖";
-                                        if (phase.includes('last quarter') || phase.includes('third quarter')) return "🌗";
-                                        if (phase.includes('waning crescent')) return "🌘";
-                                        return "🌑";
-                                      })()}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
                             </>
                           )}
                         </div>
@@ -3740,6 +4830,55 @@ export default function IntelligencePage() {
                             </div>
                           </div>
                         )} */}
+
+                        {/* Search Clear Skies Buttons - Show when cloud cover > 50% AND aurora is possible at this latitude */}
+                        {huntLocationCoords && cloudCover !== null && cloudCover > 50 && !loadingRecommendations && canSeeAuroraAtLatitude(huntLocationCoords.lat, parseFloat(currentKp)).minKpRequired !== null && (
+                          <div className="mt-4 pt-4 border-t border-white/20">
+                            <div className="text-sm font-semibold text-gray-300 mb-3">Search for clear skies nearby:</div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setSearchRadiusHours(2);
+                                  setLocationRecommendations([]);
+                                  const originCoords = yourLocationCoords || huntLocationCoords;
+                                  fetchLocationRecommendations(
+                                    huntLocationCoords.lat,
+                                    huntLocationCoords.lon,
+                                    originCoords.lat,
+                                    originCoords.lon,
+                                    huntLocationWeatherData,
+                                    undefined,
+                                    2
+                                  );
+                                }}
+                                disabled={loadingRecommendations}
+                                className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-sm font-bold rounded-lg transition-colors"
+                              >
+                                Within 2 hours
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSearchRadiusHours(4);
+                                  setLocationRecommendations([]);
+                                  const originCoords = yourLocationCoords || huntLocationCoords;
+                                  fetchLocationRecommendations(
+                                    huntLocationCoords.lat,
+                                    huntLocationCoords.lon,
+                                    originCoords.lat,
+                                    originCoords.lon,
+                                    huntLocationWeatherData,
+                                    undefined,
+                                    4
+                                  );
+                                }}
+                                disabled={loadingRecommendations}
+                                className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white text-sm font-bold rounded-lg transition-colors"
+                              >
+                                Within 4 hours
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Recommendations Section */}
                         {(() => {
@@ -3994,6 +5133,121 @@ export default function IntelligencePage() {
                   })()}
                 </div>
 
+                {/* Nearby Options - Drive Recommendations */}
+                {locationRecommendations.length > 0 && (
+                  <div className="bg-gradient-to-br from-blue-900/60 to-indigo-900/60 rounded-xl p-5 border-2 border-blue-500/40">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-2xl">🚗</span>
+                      <div>
+                        <h3 className="text-lg font-bold text-white">Nearby Options</h3>
+                        <p className="text-xs text-gray-400">Top 4 locations sorted by cloud cover</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {locationRecommendations.map((rec: any, idx: number) => {
+                        const driveTimeFormatted = rec.driveTime < 60
+                          ? `${Math.round(rec.driveTime)}min`
+                          : `${Math.floor(rec.driveTime / 60)}h ${rec.driveTime % 60}min`;
+
+                        const improvement = rec.improvement || ((cloudCover || 0) - rec.cloudCoverAtArrival);
+                        const isBest = idx === 0;
+                        const isBetter = improvement > 0;
+                        const isClear = rec.cloudCoverAtArrival < 30;
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`bg-black/30 rounded-lg p-3 border ${
+                              isBest && isClear ? 'border-green-500/50' :
+                              isBest ? 'border-blue-500/50' :
+                              'border-white/10'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex items-center gap-2">
+                                {isBest && <span className="text-yellow-400">⭐</span>}
+                                <span className="text-white font-bold">{rec.direction}</span>
+                                <span className="text-gray-400">•</span>
+                                <span className="text-gray-300">{rec.distance.toFixed(0)} km</span>
+                              </div>
+                              <span className="text-sm text-gray-400">{driveTimeFormatted} drive</span>
+                            </div>
+
+                            <div className="flex justify-between items-center mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-400">Clouds:</span>
+                                <span className={`text-sm font-bold ${
+                                  rec.cloudCoverAtArrival < 30 ? 'text-green-400' :
+                                  rec.cloudCoverAtArrival < 50 ? 'text-yellow-400' :
+                                  rec.cloudCoverAtArrival < 70 ? 'text-orange-400' :
+                                  'text-red-400'
+                                }`}>
+                                  {rec.cloudCoverAtArrival}%
+                                </span>
+                                {isClear && <span className="text-green-400 text-xs">Clear!</span>}
+                              </div>
+                              <span className={`text-xs ${isBetter ? 'text-green-400' : improvement === 0 ? 'text-gray-400' : 'text-orange-400'}`}>
+                                {isBetter ? `↓${improvement.toFixed(0)}% better` :
+                                 improvement === 0 ? 'Same' :
+                                 `↑${Math.abs(improvement).toFixed(0)}% worse`}
+                              </span>
+                            </div>
+
+                            {rec.trend && (
+                              <div className="text-xs text-gray-400 mb-2">
+                                {rec.trend === 'clearing' ? '🌤️ Clearing' :
+                                 rec.trend === 'worsening' ? '⚠️ Worsening' :
+                                 '➡️ Stable'}
+                              </div>
+                            )}
+
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&destination=${rec.coords.lat},${rec.coords.lon}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`block w-full px-3 py-2 ${
+                                isClear ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+                              } text-white text-sm font-bold rounded-lg transition-all text-center`}
+                            >
+                              Navigate →
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-3 text-xs text-gray-500 text-center">
+                      Forecasts account for your drive time • You decide which option works best
+                    </div>
+                  </div>
+                )}
+
+                {/* Loading state for recommendations */}
+                {loadingRecommendations && (
+                  <div className="bg-gradient-to-br from-blue-900/60 to-indigo-900/60 rounded-xl p-5 border-2 border-blue-500/40">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl animate-pulse">🚗</span>
+                      <span className="text-gray-400">Finding clear skies nearby...</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* No options found message */}
+                {!loadingRecommendations && recommendationsSearched && locationRecommendations.length === 0 && cloudCover && cloudCover > 50 && (
+                  <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 rounded-xl p-5 border-2 border-gray-600/40">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">☁️</span>
+                      <div>
+                        <span className="text-gray-300 font-semibold">No driveable routes found within {searchRadiusHours} hours</span>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {searchRadiusHours < 4 ? "Try searching within 4 hours" : "This area may have limited road access"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Gate 3: Can I Get There? */}
                 <div className="bg-gradient-to-br from-teal-900/60 to-cyan-900/60 rounded-xl p-5 border-2 border-teal-500/40">
                   <div className="flex items-center gap-2 mb-3">
@@ -4123,18 +5377,22 @@ export default function IntelligencePage() {
                       gate3Verdict = "START CHECKING FOR FLIGHTS TO THE POLES!";
                     } else if (isTooFar) {
                       // Check if extremely far (would need to fly)
+                      const isFlightMode = travelDistance !== null && travelDistance >= 960;
+                      const travelWord = isFlightMode ? "FLIGHT" : "DRIVE";
                       if (travelTime !== null && travelTime > 12) {
                         gate3Verdict = "TOO FAR, MAYBE IF YOU FLY NEARER TO THE POLES!";
                       } else if (travelTime !== null) {
-                        gate3Verdict = `TOO FAR, YOU'RE ${travelTime.toFixed(1)} HOURS DRIVE AWAY!`;
+                        gate3Verdict = `TOO FAR, YOU'RE ${travelTime.toFixed(1)} HOURS ${travelWord} AWAY!`;
                       } else {
-                        gate3Verdict = "TOO FAR, YOU'RE 6+ HOURS DRIVE AWAY!";
+                        gate3Verdict = `TOO FAR, YOU'RE 6+ HOURS ${travelWord} AWAY!`;
                       }
                     } else if (gate3Score >= 70) {
                       gate3Verdict = "GO FOR IT! FIND CLEAR SKIES TO SEE THE LIGHTS!";
                     } else if (gate3Score >= 45) {
+                      const isFlightMode = travelDistance !== null && travelDistance >= 960;
+                      const travelWord = isFlightMode ? "FLIGHT" : "DRIVE";
                       if (travelTime !== null) {
-                        gate3Verdict = `YOU'RE ${travelTime.toFixed(1)} HOURS DRIVE FROM SEEING THE LIGHTS!`;
+                        gate3Verdict = `YOU'RE ${travelTime.toFixed(1)} HOURS ${travelWord} FROM SEEING THE LIGHTS!`;
                       } else {
                         gate3Verdict = "YOU'RE WITHIN REACH OF SEEING THE LIGHTS!";
                       }
@@ -4143,10 +5401,10 @@ export default function IntelligencePage() {
                     }
 
                     const gate3Color = gate3Verdict.startsWith("GO FOR IT") ? "bg-[#1a4d2e] border-green-500" :
-                                      gate3Verdict.startsWith("YOU'RE") && gate3Verdict.includes("HOURS DRIVE FROM") ? "bg-[#4d3a1a] border-yellow-500" :
+                                      gate3Verdict.startsWith("YOU'RE") && (gate3Verdict.includes("HOURS DRIVE FROM") || gate3Verdict.includes("HOURS FLIGHT FROM")) ? "bg-[#4d3a1a] border-yellow-500" :
                                       "bg-[#4d1a1a] border-red-700";
                     const gate3TextColor = gate3Verdict.startsWith("GO FOR IT") ? "text-green-300" :
-                                          gate3Verdict.startsWith("YOU'RE") && gate3Verdict.includes("HOURS DRIVE FROM") ? "text-yellow-300" :
+                                          gate3Verdict.startsWith("YOU'RE") && (gate3Verdict.includes("HOURS DRIVE FROM") || gate3Verdict.includes("HOURS FLIGHT FROM")) ? "text-yellow-300" :
                                           "text-red-300";
 
                     const formatTime = (date: Date) => {
@@ -4163,7 +5421,7 @@ export default function IntelligencePage() {
                         <div className={`${!yourLocationCoords ? 'bg-gray-700/50' : gate3Color} border-2 rounded-lg p-4 text-center mb-3 h-[100px] flex items-center justify-center`}>
                           {!yourLocationCoords ? (
                             <div className="text-sm text-gray-300 italic leading-tight">
-                              Enter current location for travel analysis and reality check
+                              Enter hunt location for travel analysis and reality check
                             </div>
                           ) : (
                             <div className={`text-lg font-bold ${gate3TextColor} leading-tight px-2`}>
@@ -4174,62 +5432,92 @@ export default function IntelligencePage() {
 
                         {/* Your Location Input */}
                         <div
-                          className="mb-4 pb-4 border-b border-white/20"
+                          className="mb-4 pb-4 border-b border-white/20 bg-gradient-to-br from-teal-900/40 to-cyan-900/40 backdrop-blur-lg rounded-2xl p-4 border-2 border-teal-500/30"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <label className="block text-xs text-gray-400 mb-2">
-                            Your Location
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={yourLocation}
-                              onChange={(e) => {
-                                setYourLocation(e.target.value);
-                                if (e.target.value.length >= 3) {
-                                  fetchYourLocationSuggestions(e.target.value);
-                                } else {
-                                  setShowYourLocationSuggestions(false);
-                                }
-                              }}
-                              onFocus={() => {
-                                if (yourLocationSuggestions.length > 0) {
-                                  setShowYourLocationSuggestions(true);
-                                }
-                              }}
-                              onBlur={() => {
-                                setTimeout(() => setShowYourLocationSuggestions(false), 200);
-                              }}
-                              placeholder="e.g., Oslo, Norway"
-                              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                              autoComplete="off"
-                            />
-
-                            {showYourLocationSuggestions && yourLocationSuggestions.length > 0 && (
-                              <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-white/20 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                                {yourLocationSuggestions.map((suggestion: any, idx: number) => (
-                                  <div
-                                    key={idx}
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      selectYourLocationSuggestion(suggestion);
-                                    }}
-                                    className="px-3 py-2 hover:bg-white/10 cursor-pointer text-sm text-white border-b border-white/10 last:border-b-0"
-                                  >
-                                    {suggestion.display_name}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                          <div className="flex items-center gap-3 mb-3">
+                            <span className="text-2xl">📍</span>
+                            <div className="flex-1">
+                              <h3 className="text-sm font-bold text-white">Hunt Location</h3>
+                              <p className="text-xs text-gray-400">Where you plan to hunt aurora</p>
+                            </div>
+                            <button
+                              onClick={handleGetGPSLocation}
+                              disabled={gettingGPSLocation}
+                              className="px-3 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                            >
+                              {gettingGPSLocation ? (
+                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                              )}
+                              <span>Detect</span>
+                            </button>
                           </div>
 
-                          <button
-                            onClick={handleGetGPSLocation}
-                            disabled={gettingGPSLocation}
-                            className="mt-2 w-full px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 border border-teal-500/40 rounded-lg text-xs text-teal-300 transition-colors disabled:opacity-50"
-                          >
-                            {gettingGPSLocation ? "Getting location..." : "📍 Use my current location"}
-                          </button>
+                          <div className="relative flex gap-2">
+                            <div className="flex-1 relative">
+                              <input
+                                type="text"
+                                value={yourLocation}
+                                onChange={(e) => handleYourLocationChange(e.target.value)}
+                                onKeyDown={handleYourLocationKeyDown}
+                                onFocus={() => {
+                                  if (yourLocationSuggestions.length > 0) setShowYourLocationSuggestions(true);
+                                }}
+                                placeholder="e.g., Oslo, Norway"
+                                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                autoComplete="off"
+                              />
+
+                              {loadingYourLocationSuggestions && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                  <div className="w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+                                </div>
+                              )}
+
+                              {/* Autocomplete Dropdown */}
+                              {showYourLocationSuggestions && yourLocationSuggestions.length > 0 && (
+                                <div className="your-location-autocomplete absolute z-[9999] w-full mt-1 bg-[#1a1f2e] border border-white/20 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                  {yourLocationSuggestions.map((suggestion: any, idx: number) => (
+                                    <div
+                                      key={idx}
+                                      onClick={() => selectYourLocationSuggestion(suggestion)}
+                                      className={`px-3 py-2 cursor-pointer text-sm text-white border-b border-white/10 last:border-b-0 ${
+                                        idx === yourLocationSelectedIndex
+                                          ? "bg-teal-600/40"
+                                          : "hover:bg-white/10"
+                                      }`}
+                                    >
+                                      <div className="font-medium">{suggestion.name}</div>
+                                      <div className="text-xs text-gray-400">
+                                        {suggestion.admin1 && `${suggestion.admin1}, `}{suggestion.country}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {showYourLocationSuggestions && !loadingYourLocationSuggestions && yourLocationSuggestions.length === 0 && yourLocation.length >= 2 && (
+                                <div className="your-location-autocomplete absolute z-[9999] w-full mt-1 bg-[#1a1f2e] border border-white/20 rounded-lg shadow-xl p-3">
+                                  <p className="text-gray-400 text-sm text-center">
+                                    No locations found. Try a different search.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={handleYourLocationSubmit}
+                              disabled={!yourLocation.trim() || loadingYourLocationData}
+                              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors"
+                            >
+                              {loadingYourLocationData ? "..." : "Get"}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Data metrics below */}
@@ -4302,84 +5590,127 @@ export default function IntelligencePage() {
                             })()
                           )}
                         </div>
+
+                        {/* Flight Recommendations when travel is by flight */}
+                        {((yourLocationCoords && yourLocationImpossible) || (travelDistance !== null && travelDistance >= 960)) && (
+                          <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
+                            <div className="text-sm font-bold text-blue-300 mb-2">✈️ Recommended Countries</div>
+                            <div className="space-y-2">
+                              {[
+                                { country: "Norway", cities: "Tromsø, Alta, Svalbard" },
+                                { country: "Iceland", cities: "Reykjavik, Akureyri" },
+                                { country: "Finland", cities: "Rovaniemi, Ivalo, Saariselkä" },
+                                { country: "Sweden", cities: "Kiruna, Abisko, Luleå" },
+                                { country: "Canada", cities: "Yellowknife, Whitehorse, Inuvik" },
+                                { country: "USA (Alaska)", cities: "Fairbanks, Anchorage" }
+                              ].map((item, idx) => (
+                                <div key={idx} className="text-xs">
+                                  <span className="font-bold text-white">{item.country}:</span>
+                                  <span className="text-gray-300 ml-1">{item.cities}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Find flights buttons */}
+                            <a
+                              href="https://www.trip.com/t/YzYLsf5i7S2"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-bold rounded-lg transition-all text-center"
+                            >
+                              ✈️ Find Flights on Trip.com
+                            </a>
+
+                            <a
+                              href="https://www.agoda.com/flights"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white text-sm font-bold rounded-lg transition-all text-center"
+                            >
+                              ✈️ Search Flights on Agoda
+                            </a>
+
+                            <a
+                              href="https://www.skyscanner.com/flights"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white text-sm font-bold rounded-lg transition-all text-center"
+                            >
+                              ✈️ Compare Flights on Skyscanner
+                            </a>
+
+                            <a
+                              href="https://www.expedia.com/Flights"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm font-bold rounded-lg transition-all text-center"
+                            >
+                              ✈️ Book Flights on Expedia
+                            </a>
+                          </div>
+                        )}
+
+                        {/* Accommodation Recommendations when driving over 4 hours */}
+                        {travelDistance !== null && travelDistance < 960 && travelTime !== null && travelTime > 4 && (
+                          <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
+                            <div className="text-sm font-bold text-white mb-2">🏨 Book Accommodation Near Your Hunt</div>
+
+                            <a
+                              href="https://www.trip.com/t/YzYLsf5i7S2"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-bold rounded-lg transition-all text-center"
+                            >
+                              🏨 Find Accommodation on Trip.com
+                            </a>
+
+                            <a
+                              href="https://www.agoda.com"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white text-sm font-bold rounded-lg transition-all text-center"
+                            >
+                              🏨 Search Accommodation on Agoda
+                            </a>
+
+                            <a
+                              href="https://www.expedia.com/Hotels"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm font-bold rounded-lg transition-all text-center"
+                            >
+                              🏨 Book Accommodation on Expedia
+                            </a>
+                          </div>
+                        )}
                       </>
                     );
                   })()}
                 </div>
               </div>
 
-              {/* Solar Data Card */}
-              <a
-                href="https://www.solarham.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-2xl p-8 border-2 border-slate-600/30 cursor-pointer hover:scale-[1.02] transition-transform shadow-lg"
-              >
-                <div className="flex items-center gap-4 mb-3">
-                  <span className="text-5xl">☀️</span>
-                  <div className="flex-1">
-                    <h2 className="text-3xl font-bold text-white">Solar Data</h2>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-sm text-gray-400">Opens in new tab</span>
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-lg text-gray-200">
-                  Real-time solar flares, CME events, and space weather data from SolarHam
-                </p>
-              </a>
             </div>
 
-            {/* HD Interactive Map - Featured Card */}
-            <a
-              href="https://lightpollutionmap.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-2xl p-8 border-2 border-slate-600/30 cursor-pointer hover:scale-[1.02] transition-transform shadow-lg"
+            {/* Accommodations Link Card */}
+            <div
+              onClick={() => router.push("/accommodations")}
+              className="bg-gradient-to-r from-emerald-900/40 to-teal-900/40 backdrop-blur-lg rounded-2xl p-5 border-2 border-emerald-500/30 cursor-pointer hover:border-aurora-green/60 hover:scale-[1.01] transition-all"
             >
-              <div className="flex items-center gap-4 mb-3">
-                <span className="text-5xl">🗺️</span>
-                <div className="flex-1">
-                  <h2 className="text-3xl font-bold text-white">HD Interactive Map</h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-sm text-gray-400">Opens in new tab</span>
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-4xl">🏔️</span>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Aurora Accommodations</h3>
+                    <p className="text-sm text-gray-300 mt-1">
+                      Find glass igloos & aurora cabins with min Kp requirements & sighting rates
+                    </p>
                   </div>
                 </div>
+                <svg className="w-6 h-6 text-aurora-green flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </div>
-              <p className="text-lg text-gray-200">
-                Aurora visibility, daylight and light pollution levels at your fingertips
-              </p>
-            </a>
-
-            {/* Real-Time Satellite Cloud Cover - Featured Card */}
-            <a
-              href="https://www.sat24.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-2xl p-8 border-2 border-slate-600/30 cursor-pointer hover:scale-[1.02] transition-transform shadow-lg"
-            >
-              <div className="flex items-center gap-4 mb-3">
-                <span className="text-5xl">🛰️</span>
-                <div className="flex-1">
-                  <h2 className="text-3xl font-bold text-white">Real-Time Satellite View</h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-sm text-gray-400">Opens in new tab</span>
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-              <p className="text-lg text-gray-200">
-                Live satellite imagery showing current global cloud cover conditions
-              </p>
-            </a>
+            </div>
 
             {/* Data Sources Button */}
             <button
@@ -4406,453 +5737,182 @@ export default function IntelligencePage() {
       {/* Aurora Intel Tab - Comprehensive Scientific Analysis */}
       {activeTab === "aurora-intel" && (
         <div className="max-w-screen-lg mx-auto p-4">
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-gradient-to-br from-purple-900/40 to-indigo-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-purple-500/30">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-4xl">🌌</span>
-                <div>
-                  <h1 className="text-3xl font-bold text-white">Aurora Intel</h1>
-                  <p className="text-sm text-gray-300 mt-1">Scientific aurora probability analysis based on real-time space weather parameters</p>
-                </div>
-              </div>
+          <div className="space-y-4">
+            {/* Aurora Intel Title */}
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-3xl font-bold text-white">🌌 Aurora Intel</h2>
             </div>
 
-            {/* Aurora Probability Calculation */}
-            <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-purple-500/30">
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                <span>🎯</span>
-                <span>Aurora Probability Analysis</span>
-              </h2>
+            {/* Navigation Cards - 3 Column Grid */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* Kp Index Card */}
+              <button
+                onClick={() => router.push("/forecast")}
+                className="bg-gradient-to-br from-indigo-900/40 to-blue-900/40 rounded-xl p-4 border border-indigo-500/30 hover:scale-[1.02] hover:border-indigo-400/50 transition-all"
+              >
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <span className="text-4xl">📊</span>
+                  <h3 className="text-sm font-bold text-white">Kp Index</h3>
+                </div>
+              </button>
 
-              {(() => {
-                // Calculate probability using scientific formula
-                const kp = parseFloat(currentKp);
-                const bz = currentBz ?? 0;
-                const bt = currentBt ?? 0;
-                const speed = solarWindSpeed ?? 0;
-                const density = solarWindDensity ?? 0;
+              {/* Solar Wind Card */}
+              <button
+                onClick={() => router.push("/solar-wind")}
+                className="bg-gradient-to-br from-emerald-900/40 to-teal-900/40 rounded-xl p-4 border border-emerald-500/30 hover:scale-[1.02] hover:border-emerald-400/50 transition-all"
+              >
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <span className="text-4xl">🌬️</span>
+                  <h3 className="text-sm font-bold text-white">Solar Wind</h3>
+                </div>
+              </button>
 
-                // Base probability from Kp
-                let baseProb = 5;
-                if (kp >= 9) baseProb = 98;
-                else if (kp >= 8) baseProb = 95;
-                else if (kp >= 7) baseProb = 85;
-                else if (kp >= 6) baseProb = 70;
-                else if (kp >= 5) baseProb = 50;
-                else if (kp >= 4) baseProb = 30;
-                else if (kp >= 3) baseProb = 15;
+              {/* Experts Card */}
+              <button
+                onClick={() => router.push("/experts")}
+                className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 rounded-xl p-4 border border-purple-500/30 hover:scale-[1.02] hover:border-purple-400/50 transition-all"
+              >
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <span className="text-4xl">👨‍🔬</span>
+                  <h3 className="text-sm font-bold text-white">Experts</h3>
+                </div>
+              </button>
+            </div>
 
-                // Bz Factor
-                let bzFactor = 0.5;
-                if (bz > 5) bzFactor = 0.1;
-                else if (bz <= 5 && bz > -5) bzFactor = 0.5;
-                else if (bz <= -5 && bz > -10) bzFactor = 1.2;
-                else if (bz <= -10 && bz > -15) bzFactor = 1.8;
-                else if (bz <= -15 && bz > -20) bzFactor = 2.5;
-                else if (bz <= -20) bzFactor = 3.0;
-
-                // Speed Factor
-                let speedFactor = 0.7;
-                if (speed >= 700) speedFactor = 2.0;
-                else if (speed >= 600) speedFactor = 1.6;
-                else if (speed >= 500) speedFactor = 1.3;
-                else if (speed >= 400) speedFactor = 1.0;
-
-                // Bt Factor
-                let btFactor = 0.8;
-                if (bt >= 20) btFactor = 1.4;
-                else if (bt >= 10) btFactor = 1.2;
-                else if (bt >= 5) btFactor = 1.0;
-
-                // Density Factor
-                let densityFactor = 0.9;
-                if (density >= 20) densityFactor = 1.2;
-                else if (density >= 10) densityFactor = 1.1;
-                else if (density >= 5) densityFactor = 1.0;
-
-                // Calculate final probability
-                let probability = (baseProb / 100) * bzFactor * speedFactor * btFactor * densityFactor * 100;
-                probability = Math.min(100, Math.max(0, probability));
-
-                // Determine scenario
-                let scenario = "";
-                let scenarioColor = "";
-                let scenarioEmoji = "";
-                let characteristics = {
-                  type: "",
-                  colors: "",
-                  structure: "",
-                  latitude: "",
-                  activity: "",
-                  duration: ""
-                };
-
-                if (probability >= 95) {
-                  scenario = "Extreme Aurora";
-                  scenarioColor = "from-red-600 to-pink-600";
-                  scenarioEmoji = "🔥";
-                  characteristics = {
-                    type: "Bright, dynamic aurora with rapid movement",
-                    colors: "Intense green (557.7nm), red (630nm), purple/blue (427.8nm)",
-                    structure: "Multiple arcs, coronas, curtains with rapid pulsations",
-                    latitude: "Visible down to 40-45° geomagnetic latitude or lower",
-                    activity: "Substorms every 1-3 hours, breakups with westward traveling surges",
-                    duration: "6-12+ hours of continuous activity"
-                  };
-                } else if (probability >= 85) {
-                  scenario = "Major Aurora";
-                  scenarioColor = "from-orange-600 to-red-600";
-                  scenarioEmoji = "💥";
-                  characteristics = {
-                    type: "Very bright, structured aurora with multiple arcs",
-                    colors: "Bright green dominates, red upper borders, occasional purple",
-                    structure: "Multiple arcs, some corona formation, rapid curtain movement",
-                    latitude: "Visible to 45-50° geomagnetic latitude",
-                    activity: "Frequent substorms (2-4 hour intervals), clear breakup phases",
-                    duration: "4-8 hours of strong activity"
-                  };
-                } else if (probability >= 70) {
-                  scenario = "Strong Aurora";
-                  scenarioColor = "from-yellow-600 to-orange-600";
-                  scenarioEmoji = "⚡";
-                  characteristics = {
-                    type: "Bright, active aurora with clear structures",
-                    colors: "Bright green, occasional red upper borders",
-                    structure: "Multiple arcs, curtains with rayed structure",
-                    latitude: "Visible to 50-55° geomagnetic latitude",
-                    activity: "Periodic substorms, visible brightening and movement",
-                    duration: "3-6 hours"
-                  };
-                } else if (probability >= 50) {
-                  scenario = "Moderate Aurora";
-                  scenarioColor = "from-green-600 to-yellow-600";
-                  scenarioEmoji = "✨";
-                  characteristics = {
-                    type: "Moderate brightness, structured bands",
-                    colors: "Green dominant, faint red possible at higher altitudes",
-                    structure: "Single to multiple arcs, some curtain structure",
-                    latitude: "Visible to 55-60° geomagnetic latitude",
-                    activity: "Slow to moderate movement, occasional brightening",
-                    duration: "2-4 hours"
-                  };
-                } else if (probability >= 30) {
-                  scenario = "Minor Aurora";
-                  scenarioColor = "from-blue-600 to-green-600";
-                  scenarioEmoji = "🌟";
-                  characteristics = {
-                    type: "Faint to moderate glow with occasional structure",
-                    colors: "Primarily green, faint yellow-green",
-                    structure: "Faint arcs, sometimes diffuse patches",
-                    latitude: "Visible at 60-65° geomagnetic latitude",
-                    activity: "Slow changes, minimal dynamic activity",
-                    duration: "1-3 hours"
-                  };
-                } else if (probability >= 10) {
-                  scenario = "Weak Aurora";
-                  scenarioColor = "from-indigo-600 to-blue-600";
-                  scenarioEmoji = "💫";
-                  characteristics = {
-                    type: "Very faint glow, barely visible",
-                    colors: "Faint green, whitish to naked eye",
-                    structure: "Diffuse glow, faint arcs near horizon",
-                    latitude: "65-70° geomagnetic latitude only",
-                    activity: "Minimal movement",
-                    duration: "30 minutes to 2 hours"
-                  };
-                } else {
-                  scenario = "No Aurora";
-                  scenarioColor = "from-gray-600 to-gray-700";
-                  scenarioEmoji = "🌑";
-                  characteristics = {
-                    type: "None or extremely rare polar cusp aurora",
-                    colors: "N/A",
-                    structure: "N/A",
-                    latitude: "Above 70° only (polar regions)",
-                    activity: "None",
-                    duration: "N/A"
-                  };
-                }
-
-                // Check for missing data
-                const hasAllData = currentBz !== null && currentBt !== null && solarWindSpeed !== null && solarWindDensity !== null && !loadingKp;
-                const confidence = hasAllData ? "High" : "Low";
-
-                return (
+            {/* Real-time Data Cards - 3 Column Grid */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* Bz Reading Card */}
+              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="text-xs text-gray-400 mb-1">Bz Reading</div>
+                {loadingBz ? (
+                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                ) : (
                   <>
-                    {/* Probability Score */}
-                    <div className={`bg-gradient-to-r ${scenarioColor} rounded-2xl p-8 mb-6 shadow-lg`}>
-                      <div className="text-center">
-                        <div className="text-6xl mb-3">{scenarioEmoji}</div>
-                        <div className="text-6xl font-bold text-white mb-2">{probability.toFixed(0)}%</div>
-                        <div className="text-2xl font-bold text-white/90">{scenario}</div>
-                        <div className="text-sm text-white/70 mt-2">Confidence: {confidence}</div>
-                      </div>
+                    <div
+                      className="text-2xl font-bold"
+                      style={{ color: getBzColor(currentBz || 0) }}
+                    >
+                      {currentBz !== null ? `${currentBz >= 0 ? '+' : ''}${currentBz.toFixed(1)} nT` : '--'}
                     </div>
-
-                    {/* Calculation Breakdown */}
-                    <div className="bg-black/30 rounded-xl p-4 border border-white/10 mb-6">
-                      <h3 className="text-lg font-bold text-white mb-3">Calculation Breakdown</h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between text-gray-300">
-                          <span>Base Probability (Kp {kp.toFixed(2)}):</span>
-                          <span className="font-mono">{baseProb}%</span>
-                        </div>
-                        <div className="flex justify-between text-gray-300">
-                          <span>Bz Factor ({bz.toFixed(2)} nT):</span>
-                          <span className="font-mono">×{bzFactor.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-300">
-                          <span>Speed Factor ({speed.toFixed(0)} km/s):</span>
-                          <span className="font-mono">×{speedFactor.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-300">
-                          <span>Bt Factor ({bt.toFixed(2)} nT):</span>
-                          <span className="font-mono">×{btFactor.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-300">
-                          <span>Density Factor ({density.toFixed(2)} p/cm³):</span>
-                          <span className="font-mono">×{densityFactor.toFixed(2)}</span>
-                        </div>
-                        <div className="border-t border-white/20 pt-2 mt-2 flex justify-between text-white font-bold">
-                          <span>Final Probability:</span>
-                          <span>{probability.toFixed(0)}%</span>
-                        </div>
-                      </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {bzLastUpdated ? new Date(bzLastUpdated).toLocaleTimeString() : ''}
                     </div>
-
-                    {/* Aurora Characteristics */}
-                    {scenario !== "No Aurora" && (
-                      <div className="bg-black/30 rounded-xl p-4 border border-white/10">
-                        <h3 className="text-lg font-bold text-white mb-3">Expected Aurora Characteristics</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <span className="text-gray-400 font-medium">Type:</span>
-                            <p className="text-gray-200 mt-1">{characteristics.type}</p>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 font-medium">Colors:</span>
-                            <p className="text-gray-200 mt-1">{characteristics.colors}</p>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 font-medium">Structure:</span>
-                            <p className="text-gray-200 mt-1">{characteristics.structure}</p>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 font-medium">Latitude Reach:</span>
-                            <p className="text-gray-200 mt-1">{characteristics.latitude}</p>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 font-medium">Activity Level:</span>
-                            <p className="text-gray-200 mt-1">{characteristics.activity}</p>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 font-medium">Duration:</span>
-                            <p className="text-gray-200 mt-1">{characteristics.duration}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </>
-                );
-              })()}
-            </div>
-
-            {/* Accommodations Link Card */}
-            <div
-              onClick={() => router.push("/accommodations")}
-              className="bg-gradient-to-r from-emerald-900/40 to-teal-900/40 backdrop-blur-lg rounded-2xl p-5 border-2 border-emerald-500/30 cursor-pointer hover:border-aurora-green/60 hover:scale-[1.01] transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-4xl">🏔️</span>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Aurora Accommodations</h3>
-                    <p className="text-sm text-gray-300 mt-1">
-                      Find glass igloos & aurora cabins with min Kp requirements & sighting rates
-                    </p>
-                  </div>
-                </div>
-                <svg className="w-6 h-6 text-aurora-green flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Space Weather Parameters Status */}
-            <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-indigo-500/30">
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                <span>📊</span>
-                <span>Current Parameters</span>
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Kp Index */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Kp Index</span>
-                    <span className="text-xs text-gray-500">Planetary K-index (0-9)</span>
-                  </div>
-                  {loadingKp ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : (
-                    <>
-                      <div className="text-4xl font-bold text-aurora-green mb-2">{parseFloat(currentKp).toFixed(2)}</div>
-                      <div className="text-xs text-gray-400">
-                        {parseFloat(currentKp) <= 2 ? "Quiet" :
-                         parseFloat(currentKp) <= 5 ? "Minor to Moderate" :
-                         parseFloat(currentKp) <= 7 ? "Strong Storm" : "Severe Storm"}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Bz Component */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Bz Component</span>
-                    <span className="text-xs text-gray-500">IMF North-South (nT)</span>
-                  </div>
-                  {loadingBz ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : currentBz !== null ? (
-                    <>
-                      <div className={`text-4xl font-bold mb-2 ${
-                        currentBz < -10 ? "text-green-400" :
-                        currentBz < 0 ? "text-yellow-400" :
-                        "text-red-400"
-                      }`}>
-                        {currentBz >= 0 ? "+" : ""}{currentBz.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {currentBz < -20 ? "🟢 Extremely Favorable" :
-                         currentBz < -10 ? "🟢 Very Favorable" :
-                         currentBz < -5 ? "🟡 Favorable" :
-                         currentBz < 5 ? "🟠 Neutral" : "🔴 Unfavorable"}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-gray-500">No data</div>
-                  )}
-                </div>
-
-                {/* Bt Total Field */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Bt (Total Field)</span>
-                    <span className="text-xs text-gray-500">Total Magnetic Field (nT)</span>
-                  </div>
-                  {loadingSolarWind ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : currentBt !== null ? (
-                    <>
-                      <div className={`text-4xl font-bold mb-2 ${
-                        currentBt > 20 ? "text-green-400" :
-                        currentBt > 10 ? "text-yellow-400" :
-                        currentBt > 5 ? "text-orange-400" : "text-gray-400"
-                      }`}>
-                        {currentBt.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {currentBt > 20 ? "Very Strong" :
-                         currentBt > 10 ? "Strong" :
-                         currentBt > 5 ? "Moderate" : "Weak"}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-gray-500">No data</div>
-                  )}
-                </div>
-
-                {/* Solar Wind Speed */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Solar Wind Speed</span>
-                    <span className="text-xs text-gray-500">km/s</span>
-                  </div>
-                  {loadingSolarWind ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : solarWindSpeed !== null ? (
-                    <>
-                      <div className={`text-4xl font-bold mb-2 ${
-                        solarWindSpeed > 700 ? "text-red-400" :
-                        solarWindSpeed > 600 ? "text-orange-400" :
-                        solarWindSpeed > 500 ? "text-yellow-400" :
-                        solarWindSpeed > 400 ? "text-green-400" : "text-gray-400"
-                      }`}>
-                        {solarWindSpeed.toFixed(0)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {solarWindSpeed > 700 ? "Extreme" :
-                         solarWindSpeed > 600 ? "Very Fast" :
-                         solarWindSpeed > 500 ? "Fast" :
-                         solarWindSpeed > 400 ? "Moderate" : "Slow"}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-gray-500">No data</div>
-                  )}
-                </div>
-
-                {/* Solar Wind Density */}
-                <div
-                  onClick={() => router.push("/solar-wind")}
-                  className="bg-black/30 rounded-xl p-4 border border-white/10 cursor-pointer hover:scale-[1.02] hover:border-aurora-green/50 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400 font-medium">Solar Wind Density</span>
-                    <span className="text-xs text-gray-500">particles/cm³</span>
-                  </div>
-                  {loadingSolarWind ? (
-                    <div className="h-12 bg-white/5 animate-pulse rounded-lg"></div>
-                  ) : solarWindDensity !== null ? (
-                    <>
-                      <div className={`text-4xl font-bold mb-2 ${
-                        solarWindDensity > 20 ? "text-orange-400" :
-                        solarWindDensity > 10 ? "text-yellow-400" :
-                        solarWindDensity > 5 ? "text-green-400" : "text-gray-400"
-                      }`}>
-                        {solarWindDensity.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {solarWindDensity > 20 ? "Very High" :
-                         solarWindDensity > 10 ? "High" :
-                         solarWindDensity > 5 ? "Normal" : "Low"}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-gray-500">No data</div>
-                  )}
-                </div>
+                )}
               </div>
 
-              {/* Critical Parameter Alert */}
-              {!loadingBz && currentBz !== null && currentBz < -10 && (
-                <div className="mt-4 bg-green-500/20 border border-green-500/40 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">⚡</span>
-                    <div>
-                      <h3 className="text-lg font-bold text-green-400">Critical Factor Alert</h3>
-                      <p className="text-sm text-gray-300 mt-1">
-                        <strong>Bz component is strongly southward</strong> - This is the most critical parameter for aurora occurrence!
-                        Southward Bz enables magnetic reconnection at the magnetopause, allowing energy transfer from the solar wind into Earth's magnetosphere.
-                      </p>
+              {/* Density Card */}
+              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="text-xs text-gray-400 mb-1">Density</div>
+                {loadingSolarWind ? (
+                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                ) : (
+                  <>
+                    <div
+                      className="text-2xl font-bold"
+                      style={{ color: getDensityColor(solarWindDensity || 0) }}
+                    >
+                      {solarWindDensity !== null ? `${solarWindDensity.toFixed(1)} p/cm³` : '--'}
                     </div>
-                  </div>
-                </div>
-              )}
+                    <div className="text-xs text-gray-500 mt-1">
+                      {solarWindLastUpdated ? new Date(solarWindLastUpdated).toLocaleTimeString() : ''}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Speed Card */}
+              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="text-xs text-gray-400 mb-1">Speed</div>
+                {loadingSolarWind ? (
+                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                ) : (
+                  <>
+                    <div
+                      className="text-2xl font-bold"
+                      style={{ color: getSpeedColor(solarWindSpeed || 0) }}
+                    >
+                      {solarWindSpeed !== null ? `${solarWindSpeed.toFixed(0)} km/s` : '--'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {solarWindLastUpdated ? new Date(solarWindLastUpdated).toLocaleTimeString() : ''}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Bz Trend Card */}
+              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="text-xs text-gray-400 mb-1">Bz Trend</div>
+                {loadingBz || !bzHistory ? (
+                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                ) : (
+                  <>
+                    <div
+                      className="text-2xl font-bold capitalize"
+                      style={{
+                        // Positive Bz = no aurora, always red
+                        color: (currentBz ?? 0) >= 0 ? '#ef4444' :
+                               // Negative & strengthening or stable = good
+                               bzHistory.bzTrend === 'strengthening' || bzHistory.bzTrend === 'stable' ? '#22c55e' :
+                               // Negative but weakening = fading
+                               '#eab308'
+                      }}
+                    >
+                      {(currentBz ?? 0) >= 0 ? 'Positive' : bzHistory.bzTrend}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {bzHistory.minutesSouth}min south
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Hemisphere Power Card */}
+              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="text-xs text-gray-400 mb-1">Hemisphere Power</div>
+                {loadingHemispherePower ? (
+                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                ) : (
+                  <>
+                    <div
+                      className="text-2xl font-bold"
+                      style={{ color: getHemispherePowerColor(hemispherePower?.north || 0) }}
+                    >
+                      {hemispherePower ? `${hemispherePower.north} GW` : '--'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {hemispherePower ? getHemispherePowerStatus(hemispherePower.north) : ''}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Substorm Phase Card */}
+              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                <div className="text-xs text-gray-400 mb-1">Substorm Phase</div>
+                {loadingGoesData ? (
+                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                ) : (
+                  <>
+                    <div
+                      className="text-2xl font-bold uppercase"
+                      style={{
+                        color: energyState.substormPhase === 'expansion' ? '#ef4444' :
+                               energyState.substormPhase === 'growth' ? '#eab308' :
+                               energyState.substormPhase === 'recovery' ? '#22c55e' : '#9ca3af'
+                      }}
+                    >
+                      {energyState.substormPhase}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {energyState.substormPhase === 'expansion' ? 'Active now!' :
+                       energyState.substormPhase === 'growth' ? 'Building up' :
+                       energyState.substormPhase === 'recovery' ? 'Fading' : 'No activity'}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Time Lag Information */}

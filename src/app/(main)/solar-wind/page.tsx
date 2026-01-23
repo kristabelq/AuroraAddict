@@ -294,7 +294,7 @@ export default function SolarWindPage() {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => router.push("/intelligence?tab=cosmic")}
+            onClick={() => router.push("/intelligence?tab=aurora-intel")}
             className="flex items-center gap-2 text-gray-400 hover:text-white mb-4 transition-colors"
           >
             <svg
@@ -310,7 +310,7 @@ export default function SolarWindPage() {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-            Back to Cosmic Intel
+            Back to Aurora Intel
           </button>
 
           <h1 className="text-3xl font-bold mb-2">Real-Time Solar Wind</h1>
