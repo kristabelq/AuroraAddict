@@ -260,6 +260,16 @@ export default function IntelligencePage() {
     fetchCoronalHoleData();
     fetchSunspotData();
     fetchHemispherePower();
+
+    // Auto-refresh real-time data every 60 seconds
+    const refreshInterval = setInterval(() => {
+      fetchCurrentKp();
+      fetchCurrentBz();
+      fetchSolarWindData();
+      fetchHemispherePower();
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // Fetch substorm data after Kp and Bz history are available
@@ -4134,11 +4144,16 @@ export default function IntelligencePage() {
                             <span className="text-xs text-gray-400">Bz Trend</span>
                             {bzHistory ? (
                               <span className={`text-sm font-bold capitalize ${
+                                // Positive Bz = no aurora, always red
+                                bz >= 0 ? 'text-red-400' :
+                                // Negative & strengthening (more negative) = great
                                 bzHistory.bzTrend === 'strengthening' ? 'text-green-400' :
-                                bzHistory.bzTrend === 'weakening' ? 'text-red-400' :
-                                'text-gray-400'
+                                // Negative & stable = still good
+                                bzHistory.bzTrend === 'stable' ? 'text-green-400' :
+                                // Negative but weakening (toward 0) = fading
+                                'text-yellow-400'
                               }`}>
-                                {bzHistory.bzTrend}
+                                {bz >= 0 ? 'positive' : bzHistory.bzTrend}
                               </span>
                             ) : (
                               <span className="text-xs text-gray-500">Loading...</span>
@@ -5835,9 +5850,16 @@ export default function IntelligencePage() {
                   <>
                     <div
                       className="text-2xl font-bold capitalize"
-                      style={{ color: bzHistory.bzTrend === 'strengthening' ? '#22c55e' : bzHistory.bzTrend === 'weakening' ? '#ef4444' : '#9ca3af' }}
+                      style={{
+                        // Positive Bz = no aurora, always red
+                        color: (currentBz ?? 0) >= 0 ? '#ef4444' :
+                               // Negative & strengthening or stable = good
+                               bzHistory.bzTrend === 'strengthening' || bzHistory.bzTrend === 'stable' ? '#22c55e' :
+                               // Negative but weakening = fading
+                               '#eab308'
+                      }}
                     >
-                      {bzHistory.bzTrend}
+                      {(currentBz ?? 0) >= 0 ? 'Positive' : bzHistory.bzTrend}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                       {bzHistory.minutesSouth}min south
