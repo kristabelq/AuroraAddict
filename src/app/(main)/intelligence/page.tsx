@@ -3727,77 +3727,92 @@ export default function IntelligencePage() {
                   <span className="text-xl font-bold text-yellow-200">Solar Flare Activity</span>
                 </div>
 
+                {/* Recent X and M-Class Flares */}
                 {(() => {
-                  const flareClass = solarFlare.class;
-                  const intensity = solarFlare.intensity;
+                  // Get unique X and M-class flares from chart data (last 3 days)
+                  const xFlares = flareChartData
+                    .filter(f => f.class === 'X')
+                    .reduce((acc: FlareChartDataPoint[], curr) => {
+                      // Only keep distinct flares (at least 30 min apart)
+                      const lastFlare = acc[acc.length - 1];
+                      if (!lastFlare || curr.timestamp - lastFlare.timestamp > 30 * 60 * 1000) {
+                        acc.push(curr);
+                      } else if (curr.intensity > lastFlare.intensity) {
+                        acc[acc.length - 1] = curr; // Keep the stronger one
+                      }
+                      return acc;
+                    }, [])
+                    .slice(-5); // Last 5 X-class flares
 
-                  // Determine insight based on flare class
-                  let statusColor = "text-gray-400";
-                  let statusBg = "bg-gray-500/20 border-gray-500/30";
-                  let statusLabel = "Quiet";
-                  let insight = "Low solar activity. Aurora unlikely from current conditions.";
-                  let action = null;
+                  const mFlares = flareChartData
+                    .filter(f => f.class === 'M')
+                    .reduce((acc: FlareChartDataPoint[], curr) => {
+                      const lastFlare = acc[acc.length - 1];
+                      if (!lastFlare || curr.timestamp - lastFlare.timestamp > 30 * 60 * 1000) {
+                        acc.push(curr);
+                      } else if (curr.intensity > lastFlare.intensity) {
+                        acc[acc.length - 1] = curr;
+                      }
+                      return acc;
+                    }, [])
+                    .slice(-5); // Last 5 M-class flares
 
-                  if (flareClass === "X") {
-                    statusColor = "text-red-400";
-                    statusBg = "bg-red-500/20 border-red-500/30";
-                    statusLabel = "High Alert";
-                    insight = "X-class flares often produce Earth-directed CMEs. Watch for CME announcement in the next few hours.";
-                    action = "Watch CME Alerts";
-                  } else if (flareClass === "M") {
-                    statusColor = "text-orange-400";
-                    statusBg = "bg-orange-500/20 border-orange-500/30";
-                    statusLabel = "Elevated";
-                    insight = intensity >= 5
-                      ? "Strong M-class flare may produce a CME. Monitor for potential CME activity."
-                      : "Moderate activity. M-class flares can occasionally produce CMEs.";
-                    action = intensity >= 5 ? "Monitor CME Alerts" : null;
-                  } else if (flareClass === "C") {
-                    statusColor = "text-yellow-400";
-                    statusBg = "bg-yellow-500/20 border-yellow-500/30";
-                    statusLabel = "Normal";
-                    insight = "Background solar activity. C-class flares rarely produce significant CMEs.";
-                  } else {
-                    statusLabel = "Quiet";
-                    insight = "Low solar activity. Aurora depends on existing CMEs or coronal hole streams.";
-                  }
+                  const hasSignificantFlares = xFlares.length > 0 || mFlares.length > 0;
 
                   return (
-                    <div className={`rounded-xl p-4 border ${statusBg}`}>
-                      <div className="flex items-start justify-between gap-4">
-                        {/* Left side - Flare Info */}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-3">
-                            <span className={`text-4xl font-bold ${
-                              flareClass === "X" ? "text-red-400" :
-                              flareClass === "M" ? "text-orange-400" :
-                              flareClass === "C" ? "text-yellow-400" :
-                              "text-gray-400"
-                            }`}>
-                              {flareClass}{intensity.toFixed(1)}
-                            </span>
-                            <span className={`text-xs font-bold px-2 py-1 rounded ${statusColor} ${statusBg}`}>
-                              {statusLabel}
-                            </span>
-                          </div>
-
-                          <p className="text-sm text-gray-300 mb-3">{insight}</p>
-
-                          <div className="text-xs text-gray-500">
-                            Last updated: {new Date(solarFlare.time).toLocaleString()}
-                          </div>
+                    <div className="space-y-3">
+                      {/* X-Class Flares */}
+                      <div className={`rounded-xl p-4 border ${xFlares.length > 0 ? 'bg-red-500/20 border-red-500/30' : 'bg-red-500/5 border-red-500/10'}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg">🔴</span>
+                          <span className="text-sm font-bold text-red-400">X-Class Flares</span>
+                          <span className="text-xs text-gray-500">(last 3 days)</span>
                         </div>
-
-                        {/* Right side - Action hint */}
-                        {action && (
-                          <div className="flex flex-col items-end">
-                            <div className={`text-xs font-semibold ${statusColor} mb-1`}>
-                              {action}
-                            </div>
-                            <span className="text-2xl">👀</span>
+                        {xFlares.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {xFlares.map((flare, i) => (
+                              <div key={i} className="bg-red-500/30 rounded-lg px-3 py-2 border border-red-500/40">
+                                <div className="text-lg font-bold text-red-300">X{flare.intensity.toFixed(1)}</div>
+                                <div className="text-xs text-red-200/70">
+                                  {new Date(flare.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                </div>
+                              </div>
+                            ))}
                           </div>
+                        ) : (
+                          <p className="text-sm text-gray-500">No X-class flares in the last 3 days</p>
                         )}
                       </div>
+
+                      {/* M-Class Flares */}
+                      <div className={`rounded-xl p-4 border ${mFlares.length > 0 ? 'bg-orange-500/20 border-orange-500/30' : 'bg-orange-500/5 border-orange-500/10'}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg">🟠</span>
+                          <span className="text-sm font-bold text-orange-400">M-Class Flares</span>
+                          <span className="text-xs text-gray-500">(last 3 days)</span>
+                        </div>
+                        {mFlares.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {mFlares.map((flare, i) => (
+                              <div key={i} className="bg-orange-500/30 rounded-lg px-3 py-2 border border-orange-500/40">
+                                <div className="text-lg font-bold text-orange-300">M{flare.intensity.toFixed(1)}</div>
+                                <div className="text-xs text-orange-200/70">
+                                  {new Date(flare.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500">No M-class flares in the last 3 days</p>
+                        )}
+                      </div>
+
+                      {/* Insight */}
+                      {hasSignificantFlares && (
+                        <p className="text-xs text-gray-400 mt-2">
+                          💡 X and M-class flares can produce CMEs that may cause aurora 1-3 days later.
+                        </p>
+                      )}
                     </div>
                   );
                 })()}
