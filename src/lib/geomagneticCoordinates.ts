@@ -1,12 +1,17 @@
 /**
  * Geomagnetic Coordinate Conversion
  * Converts geographic coordinates to geomagnetic coordinates
- * Based on IGRF-13 model approximation for 2025
+ * Based on IGRF-14 model for 2025-2030
+ *
+ * Note: The magnetic pole shifts ~40-50 km/year towards Siberia.
+ * These values should be reviewed and updated around 2030.
+ * Reference: https://www.ncei.noaa.gov/products/international-geomagnetic-reference-field
  */
 
-// Geomagnetic pole position for 2025 (approximate)
-const GEOMAG_POLE_LAT = 86.5; // degrees North
-const GEOMAG_POLE_LON = -164.0; // degrees East (164°W)
+// Geomagnetic pole position for 2025 (IGRF-14)
+// North Magnetic Pole: 86.1°N, 156.8°W (moving towards Russia)
+const GEOMAG_POLE_LAT = 86.1; // degrees North
+const GEOMAG_POLE_LON = -156.8; // degrees East (156.8°W)
 
 /**
  * Convert degrees to radians
@@ -119,65 +124,72 @@ export function calculateAuroraVisibility(
 } {
   const oval = getAuroralOvalLatitude(kp);
 
-  // Too far south - no aurora
-  if (geomagneticLat < oval.equatorwardEdge - 3) {
+  // Handle both hemispheres - use absolute value for calculations
+  const isNorthernHemisphere = geomagneticLat >= 0;
+  const absGeomagLat = Math.abs(geomagneticLat);
+  const horizonDirection = isNorthernHemisphere ? "northern" : "southern";
+  const poleDirection = isNorthernHemisphere ? "north" : "south";
+  const equatorDirection = isNorthernHemisphere ? "south" : "north";
+
+  // Too far from pole - no aurora
+  if (absGeomagLat < oval.equatorwardEdge - 3) {
     return {
       isVisible: false,
       quality: "none",
-      message: `Aurora too far north (need Kp ${Math.ceil((67 - geomagneticLat) / 2.5)}+)`,
+      message: `Aurora too far ${poleDirection} (need Kp ${Math.ceil((67 - absGeomagLat) / 2.5)}+)`,
     };
   }
 
-  // Just below the oval - faint on northern horizon
-  if (geomagneticLat < oval.equatorwardEdge) {
+  // Just below the oval - faint on horizon toward pole
+  if (absGeomagLat < oval.equatorwardEdge) {
     return {
       isVisible: true,
       quality: "poor",
-      message: "Faint glow on northern horizon",
+      message: `Faint glow on ${horizonDirection} horizon`,
     };
   }
 
   // At equatorward edge - low on horizon
-  if (geomagneticLat < oval.equatorwardEdge + 2) {
+  if (absGeomagLat < oval.equatorwardEdge + 2) {
     return {
       isVisible: true,
       quality: "fair",
-      message: "Aurora low on northern horizon",
+      message: `Aurora low on ${horizonDirection} horizon`,
     };
   }
 
   // In the oval - good viewing
-  if (geomagneticLat < oval.centerLat - 2) {
+  if (absGeomagLat < oval.centerLat - 2) {
     return {
       isVisible: true,
       quality: "good",
-      message: "Aurora visible in northern sky",
+      message: `Aurora visible in ${horizonDirection} sky`,
     };
   }
 
   // Near oval center - excellent viewing
-  if (geomagneticLat < oval.polewardEdge - 2) {
+  if (absGeomagLat < oval.polewardEdge - 2) {
     return {
       isVisible: true,
       quality: "excellent",
-      message: "Aurora overhead or in south sky",
+      message: `Aurora overhead or toward ${equatorDirection}`,
     };
   }
 
-  // Too far north - aurora to the south
-  if (geomagneticLat < oval.polewardEdge + 3) {
+  // Too close to pole - aurora toward equator
+  if (absGeomagLat < oval.polewardEdge + 3) {
     return {
       isVisible: true,
       quality: "good",
-      message: "Aurora visible to the south",
+      message: `Aurora visible to the ${equatorDirection}`,
     };
   }
 
-  // Way too far north - inside polar cap
+  // Way too close to pole - inside polar cap
   return {
     isVisible: false,
     quality: "none",
-    message: "Too far north - inside polar cap",
+    message: `Too far ${poleDirection} - inside polar cap`,
   };
 }
 
@@ -271,5 +283,182 @@ export const REFERENCE_CITIES = [
     geographicLat: 40.7,
     geographicLon: -74.0,
     note: "Extreme events only",
+  },
+  // Southern Hemisphere
+  {
+    name: "Ushuaia, Argentina",
+    geographicLat: -54.8,
+    geographicLon: -68.3,
+    note: "Southernmost city - excellent aurora australis",
+  },
+  {
+    name: "Queenstown, New Zealand",
+    geographicLat: -45.0,
+    geographicLon: 168.7,
+    note: "Popular aurora australis destination",
+  },
+  {
+    name: "Hobart, Tasmania",
+    geographicLat: -42.9,
+    geographicLon: 147.3,
+    note: "Good southern lights viewing",
+  },
+  {
+    name: "Stewart Island, New Zealand",
+    geographicLat: -47.0,
+    geographicLon: 167.8,
+    note: "Excellent dark skies for aurora",
+  },
+  {
+    name: "Invercargill, New Zealand",
+    geographicLat: -46.4,
+    geographicLon: 168.4,
+    note: "Southernmost NZ city",
+  },
+  {
+    name: "Punta Arenas, Chile",
+    geographicLat: -53.2,
+    geographicLon: -70.9,
+    note: "Gateway to Antarctica - great aurora",
+  },
+  {
+    name: "Sydney, Australia",
+    geographicLat: -33.9,
+    geographicLon: 151.2,
+    note: "Visible during major storms - Kp 8+",
+  },
+  {
+    name: "Melbourne, Australia",
+    geographicLat: -37.8,
+    geographicLon: 145.0,
+    note: "Better chances than Sydney - Kp 7+",
+  },
+  {
+    name: "Perth, Australia",
+    geographicLat: -31.9,
+    geographicLon: 115.9,
+    note: "Rare sightings during extreme storms",
+  },
+  {
+    name: "Adelaide, Australia",
+    geographicLat: -34.9,
+    geographicLon: 138.6,
+    note: "Southern Australia - Kp 7+",
+  },
+  {
+    name: "Buenos Aires, Argentina",
+    geographicLat: -34.6,
+    geographicLon: -58.4,
+    note: "Major storms only - Kp 8+",
+  },
+  {
+    name: "El Calafate, Argentina",
+    geographicLat: -50.3,
+    geographicLon: -72.3,
+    note: "Patagonia - good aurora australis",
+  },
+  {
+    name: "Bariloche, Argentina",
+    geographicLat: -41.1,
+    geographicLon: -71.3,
+    note: "Patagonia - Kp 6+",
+  },
+  {
+    name: "Stanley, Falkland Islands",
+    geographicLat: -51.7,
+    geographicLon: -57.9,
+    note: "Remote - excellent dark skies",
+  },
+  {
+    name: "Cape Town, South Africa",
+    geographicLat: -33.9,
+    geographicLon: 18.4,
+    note: "Extreme events only - Kp 9",
+  },
+  {
+    name: "Durban, South Africa",
+    geographicLat: -29.9,
+    geographicLon: 31.0,
+    note: "Very rare - extreme storms",
+  },
+  // More European cities
+  {
+    name: "Zurich, Switzerland",
+    geographicLat: 47.4,
+    geographicLon: 8.5,
+    note: "Visible during strong storms - Kp 7+",
+  },
+  {
+    name: "Munich, Germany",
+    geographicLat: 48.1,
+    geographicLon: 11.6,
+    note: "Kp 6-7+ for visibility",
+  },
+  {
+    name: "Berlin, Germany",
+    geographicLat: 52.5,
+    geographicLon: 13.4,
+    note: "Better than southern Germany - Kp 5+",
+  },
+  {
+    name: "Edinburgh, Scotland",
+    geographicLat: 55.9,
+    geographicLon: -3.2,
+    note: "Good aurora location - Kp 4+",
+  },
+  {
+    name: "Dublin, Ireland",
+    geographicLat: 53.3,
+    geographicLon: -6.3,
+    note: "Kp 5+ for good viewing",
+  },
+  {
+    name: "Copenhagen, Denmark",
+    geographicLat: 55.7,
+    geographicLon: 12.6,
+    note: "Northern Europe - Kp 4+",
+  },
+  {
+    name: "Helsinki, Finland",
+    geographicLat: 60.2,
+    geographicLon: 24.9,
+    note: "Great aurora location - Kp 3+",
+  },
+  {
+    name: "Stockholm, Sweden",
+    geographicLat: 59.3,
+    geographicLon: 18.1,
+    note: "Good viewing - Kp 3+",
+  },
+  // More North American cities
+  {
+    name: "Seattle, USA",
+    geographicLat: 47.6,
+    geographicLon: -122.3,
+    note: "Pacific NW - Kp 6+",
+  },
+  {
+    name: "Chicago, USA",
+    geographicLat: 41.9,
+    geographicLon: -87.6,
+    note: "Major storms - Kp 7+",
+  },
+  {
+    name: "Denver, USA",
+    geographicLat: 39.7,
+    geographicLon: -104.9,
+    note: "Extreme events - Kp 8+",
+  },
+  {
+    name: "Toronto, Canada",
+    geographicLat: 43.7,
+    geographicLon: -79.4,
+    note: "Kp 6+ for good viewing",
+  },
+  {
+    name: "Vancouver, Canada",
+    geographicLat: 49.3,
+    geographicLon: -123.1,
+    note: "Pacific coast - Kp 5+",
   },
 ];

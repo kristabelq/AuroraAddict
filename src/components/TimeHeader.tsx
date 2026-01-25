@@ -75,7 +75,7 @@ export default function TimeHeader() {
                   Data is still evolving and may contain inaccuracies.
                 </span>
                 <a
-                  href="https://forms.gle/f7B6LYYgoURqvvtbA"
+                  href="https://forms.gle/yoPfrnhPHWcoMHcv6"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-white transition-colors font-medium"
@@ -111,22 +111,22 @@ export default function TimeHeader() {
       </div>
 
       {/* Beta Banner */}
-      <div className="bg-gradient-to-r from-purple-900/80 to-indigo-900/80 backdrop-blur-sm border-b border-purple-500/30 px-4 py-2">
+      <div className="bg-gradient-to-r from-purple-900/80 to-indigo-900/80 backdrop-blur-sm border-b border-purple-500/30 px-3 py-1.5">
         <div className="max-w-screen-lg mx-auto">
-          <p className="text-center text-xs sm:text-sm text-purple-100">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="bg-purple-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">BETA</span>
-              <span className="text-purple-200">
-                Data is still evolving and may contain inaccuracies.
-              </span>
-              <a
-                href="mailto:hello@auroraaddict.com"
-                className="underline hover:text-white transition-colors font-medium"
-              >
-                Report issues →
-              </a>
+          <div className="flex items-center justify-center gap-2 text-[11px] sm:text-sm text-purple-100">
+            <span className="bg-purple-500 text-white text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0">BETA</span>
+            <span className="text-purple-200">
+              Data still evolving, may be inaccurate.
             </span>
-          </p>
+            <a
+              href="https://forms.gle/yoPfrnhPHWcoMHcv6"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-white transition-colors font-medium flex-shrink-0"
+            >
+              Report →
+            </a>
+          </div>
         </div>
       </div>
     </div>
