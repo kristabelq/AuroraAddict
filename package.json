@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "dev:clean": "rm -rf .next && next dev",
-    "build": "rm -rf .next && next build",
+    "build": "prisma generate && rm -rf .next && next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "next lint",
     "clean": "rm -rf .next",
