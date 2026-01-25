@@ -106,12 +106,37 @@ export default function AboutPage() {
           <h3 className="text-lg font-semibold text-white">About Aurora Intel</h3>
           <div className="bg-white/5 rounded-xl p-5 space-y-4">
             <p className="text-gray-300 leading-relaxed">
-              Aurora Intel is designed and created by Kristabel, a passionate aurora hunter, who wanted to create the ultimate tool for fellow aurora addicts. Whether you are planning your first aurora hunt or you are a seasoned veteran, this app is designed to help you catch the magic of the Northern and Southern Lights.
+              Aurora Intel is designed and created by Kristabel, a passionate aurora hunter, who wanted to create the ultimate tool for fellow aurora addicts.
+            </p>
+            <p className="text-gray-300 leading-relaxed">
+              Whether you are planning your first aurora hunt or you are a seasoned veteran, this app is designed to help you catch the magic of the Northern and Southern Lights.
             </p>
             <p className="text-gray-300 leading-relaxed">
               From real-time solar wind data to community sightings and organised hunts, Aurora Intel brings everything you need into one place.
             </p>
           </div>
+        </div>
+
+        {/* Data Sources */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">Data Sources</h3>
+          <Link
+            href="/data-sources"
+            className="flex items-center gap-4 bg-white/5 hover:bg-white/10 rounded-xl p-4 transition-all"
+          >
+            <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center">
+              <svg className="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-white font-medium">Data Sources</p>
+              <p className="text-gray-400 text-sm">13 sources powering Aurora Intel</p>
+            </div>
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
         </div>
 
         {/* Add to Home Screen Instructions */}
@@ -150,10 +175,225 @@ export default function AboutPage() {
           </div>
         </div>
 
+        {/* Best Strategy */}
+        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+          <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+            <span>🎯</span>
+            Best Strategy for Aurora Hunting:
+          </h3>
+          <p className="text-sm text-gray-300">
+            <strong className="text-green-400">Plan your trips around coronal holes</strong> (predictable, multi-day events), but stay flexible for CME alerts (shorter notice, potentially more spectacular). This gives you the best of both worlds: reliable aurora activity with a chance for extraordinary displays!
+          </p>
+        </div>
+
+        {/* Flare-CME Connection */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">The Connection: Flares → CMEs → Aurora</h3>
+          <div className="space-y-3">
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+              <h4 className="text-base font-semibold text-red-300 mb-2">1. Solar Flare Erupts ⚡</h4>
+              <p className="text-sm text-gray-300 mb-2">
+                A solar flare releases electromagnetic radiation (light, X-rays, radio waves) that reaches Earth in just 8 minutes at the speed of light.
+              </p>
+              <p className="text-xs text-gray-400">
+                <strong>Effect on Earth:</strong> Radio blackouts, GPS disruption - but no aurora yet!
+              </p>
+            </div>
+
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
+              <h4 className="text-base font-semibold text-orange-300 mb-2">2. CME Launches ☄️</h4>
+              <p className="text-sm text-gray-300 mb-2">
+                Strong flares (especially X-class) often launch a Coronal Mass Ejection - billions of tons of magnetized plasma that travels much slower than light.
+              </p>
+              <p className="text-xs text-gray-400">
+                <strong>Timeline:</strong> Check coronagraph images 20-60 minutes after major flare for CME confirmation.
+              </p>
+            </div>
+
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+              <h4 className="text-base font-semibold text-yellow-300 mb-2">3. CME Travels to Earth 🌍</h4>
+              <p className="text-sm text-gray-300 mb-2">
+                If Earth-directed, the CME travels for 1-3 days depending on speed. This is when aurora hunters prepare!
+              </p>
+              <p className="text-xs text-gray-400">
+                <strong>Your window:</strong> From flare detection to aurora = 1-3 days of preparation time.
+              </p>
+            </div>
+
+            <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+              <h4 className="text-base font-semibold text-green-300 mb-2">4. Aurora! 🌌</h4>
+              <p className="text-sm text-gray-300 mb-2">
+                When the CME hits Earth&apos;s magnetosphere, if the magnetic field orientation is favorable (Bz south), spectacular aurora displays light up the sky!
+              </p>
+              <p className="text-xs text-gray-400">
+                <strong>Duration:</strong> Aurora can last from a few hours to multiple days depending on CME size and speed.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Flare Class vs CME Probability */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">Flare Class vs CME Launch Probability</h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+              <div>
+                <div className="text-red-300 font-bold">X-class Flares</div>
+                <div className="text-xs text-gray-400">Major flares, most powerful</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-red-300">~90%</div>
+                <div className="text-xs text-gray-400">CME probability</div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-orange-500/10 border border-orange-500/30 rounded-xl">
+              <div>
+                <div className="text-orange-300 font-bold">M-class Flares</div>
+                <div className="text-xs text-gray-400">Moderate flares</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-orange-300">~60%</div>
+                <div className="text-xs text-gray-400">CME probability</div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+              <div>
+                <div className="text-yellow-300 font-bold">C-class Flares</div>
+                <div className="text-xs text-gray-400">Minor flares</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-yellow-300">~20%</div>
+                <div className="text-xs text-gray-400">CME probability</div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4">
+            <p className="text-sm text-gray-300">
+              <span className="text-green-400 font-semibold">Key Insight:</span> Flare ≠ CME ≠ Aurora.
+              <strong> Flares are electromagnetic (instant)</strong>, <strong>CMEs are plasma (slow)</strong>.
+              A strong flare WITHOUT a CME produces no aurora - just radio effects!
+            </p>
+          </div>
+        </div>
+
+        {/* Comparison: Coronal Holes vs CMEs */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">Coronal Holes vs CMEs</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-4">
+              <div className="text-violet-300 font-bold mb-3">🕳️ Coronal Holes (HSS)</div>
+              <ul className="text-sm text-gray-300 space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span>Predictable ~27-day cycle</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span>Lasts 2-5 days (multiple nights)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span>Kp 4-6 (moderate, reliable)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span>Great for planning trips</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span>Consistent performance</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
+              <div className="text-orange-300 font-bold mb-3">☄️ CMEs</div>
+              <ul className="text-sm text-gray-300 space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-400">•</span>
+                  <span>Unpredictable (no cycle)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-400">•</span>
+                  <span>Usually lasts 6-24 hours</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-400">•</span>
+                  <span>Kp 5-9 (can be extreme)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-400">•</span>
+                  <span>Short notice (1-3 days)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-400">•</span>
+                  <span>Performance varies (Bz dependent)</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Response Time & Timeline */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">Response Time & Timeline</h3>
+
+          <div className="bg-white/5 rounded-xl p-4 space-y-3">
+            <h4 className="font-semibold text-white">IMF to Aurora Response</h4>
+            <ul className="text-sm text-gray-300 space-y-2">
+              <li className="flex items-start gap-2">
+                <span className="text-aurora-green">•</span>
+                <span><strong>L1 monitoring point:</strong> 1.5 million km from Earth</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-aurora-green">•</span>
+                <span><strong>Transit time to Earth:</strong> 30-60 minutes typically</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-aurora-green">•</span>
+                <span><strong>Magnetospheric response:</strong> 20-40 minutes after IMF arrival</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-aurora-green">•</span>
+                <span><strong>Total lag:</strong> ~45-90 minutes from L1 observation to aurora onset</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="bg-white/5 rounded-xl p-4 space-y-3">
+            <h4 className="font-semibold text-white">Substorm Development Timeline</h4>
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                  <span className="text-sm font-medium text-white">Growth Phase (30-60 min)</span>
+                </div>
+                <p className="text-xs text-gray-400 ml-4">Energy loading, quiet period before onset</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                  <span className="text-sm font-medium text-white">Expansion Phase (10-30 min)</span>
+                </div>
+                <p className="text-xs text-gray-400 ml-4">Aurora brightens dramatically and spreads</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-purple-400"></div>
+                  <span className="text-sm font-medium text-white">Recovery Phase (30-120 min)</span>
+                </div>
+                <p className="text-xs text-gray-400 ml-4">Aurora fades, pulsating patches remain</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Version */}
         <div className="text-center text-gray-500 text-sm">
-          <p>Version 1.0.0</p>
-          <p className="mt-1">Made with love for aurora chasers everywhere</p>
+          <p>Version 1.1.0</p>
+          <p className="mt-1">♥ Made with love for aurora addicts everywhere ♥</p>
         </div>
       </div>
     </div>

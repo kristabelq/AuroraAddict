@@ -1,8 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 import TimeHeader from "@/components/TimeHeader";
 
 interface Expert {
@@ -29,21 +27,7 @@ const experts: Expert[] = [
 ];
 
 export default function ExpertsPage() {
-  const { data: session, status } = useSession();
   const router = useRouter();
-
-  useEffect(() => {
-    if (status === "loading") return;
-
-    if (status === "unauthenticated") {
-      router.push("/auth/signin");
-      return;
-    }
-
-    if (session?.user && !session.user.onboardingComplete) {
-      router.push("/onboarding");
-    }
-  }, [session, status, router]);
 
   const getPlatformIcon = (platform: string) => {
     switch (platform) {
@@ -74,17 +58,6 @@ export default function ExpertsPage() {
         return "from-gray-900/40 to-gray-800/40 border-gray-500/30";
     }
   };
-
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-[#0f1420] text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-purple-500 border-t-transparent"></div>
-          <p className="text-gray-300 mt-4">Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#0f1420] text-white pb-24">

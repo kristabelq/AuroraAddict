@@ -28,14 +28,65 @@ export default function SolarFlaresPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [mounted, setMounted] = useState(false);
+  const [selectedVideoSource, setSelectedVideoSource] = useState<string>("sdo193");
+  const [lascoImageKey, setLascoImageKey] = useState(Date.now());
+  const [flareProbability, setFlareProbability] = useState<{
+    c: number;
+    m: number;
+    x: number;
+    date: string;
+  } | null>(null);
 
   useEffect(() => {
     setMounted(true);
     fetchSolarFlareData();
+    fetchFlareProbability();
     // Refresh every 5 minutes
-    const interval = setInterval(fetchSolarFlareData, 5 * 60 * 1000);
+    const interval = setInterval(() => {
+      fetchSolarFlareData();
+      fetchFlareProbability();
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchFlareProbability = async () => {
+    try {
+      const response = await fetch(
+        "https://services.swpc.noaa.gov/json/solar_probabilities.json"
+      );
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        // Get the most recent forecast (first item is usually today)
+        const today = data[0];
+        setFlareProbability({
+          c: today.c_class_1_day || 0,
+          m: today.m_class_1_day || 0,
+          x: today.x_class_1_day || 0,
+          date: today.date_stamp || new Date().toISOString().split('T')[0],
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching flare probability:", error);
+    }
+  };
+
+  // Refresh LASCO images every 5 minutes
+  useEffect(() => {
+    const lascoInterval = setInterval(() => {
+      setLascoImageKey(Date.now());
+    }, 5 * 60 * 1000);
+    return () => clearInterval(lascoInterval);
+  }, []);
+
+  // Video sources for dropdown
+  const videoSources = [
+    { id: "sdo193", name: "SDO AIA 193 (48h)", desc: "Corona & flare regions" },
+    { id: "sdo304", name: "SDO AIA 304 (48h)", desc: "Chromosphere - Best for flares" },
+    { id: "sdo131", name: "SDO AIA 131 (48h)", desc: "Hot flare plasma (10M K)" },
+    { id: "lasco-c2", name: "LASCO C2", desc: "Inner corona (2-6 solar radii)" },
+    { id: "lasco-c3", name: "LASCO C3", desc: "Outer corona (3.7-30 solar radii)" },
+  ];
 
   const fetchSolarFlareData = async () => {
     try {
@@ -276,6 +327,27 @@ export default function SolarFlaresPage() {
       .slice(0, 5); // Show top 5 most recent
   };
 
+  // Get last 3 significant flares (C class and above)
+  const getLast3Flares = () => {
+    return flareHistory
+      .filter(flare => flare.class === 'C' || flare.class === 'M' || flare.class === 'X')
+      .slice(0, 3);
+  };
+
+  // Get last 3 X-class flares
+  const getLast3XClassFlares = () => {
+    return flareHistory
+      .filter(flare => flare.class === 'X')
+      .slice(0, 3);
+  };
+
+  // Get last 3 M-class flares
+  const getLast3MClassFlares = () => {
+    return flareHistory
+      .filter(flare => flare.class === 'M')
+      .slice(0, 3);
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0e17] pb-24">
       <TimeHeader />
@@ -296,7 +368,7 @@ export default function SolarFlaresPage() {
                   d="M15 19l-7-7 7-7"
                 />
               </svg>
-              <span className="font-medium">Back to Cosmic Intel</span>
+              <span className="font-medium">Back to Aurora Forecast</span>
             </button>
           </div>
           <div className="flex items-center justify-between">
@@ -326,23 +398,116 @@ export default function SolarFlaresPage() {
           </div>
         ) : (
           <>
+            {/* Live Solar Videos */}
+            <div className="bg-gradient-to-br from-red-900/40 to-purple-900/40 backdrop-blur-lg rounded-2xl border border-red-500/30 overflow-hidden">
+              <div className="p-4 space-y-4">
+                {/* Video source dropdown */}
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Select Video Source</label>
+                  <select
+                    value={selectedVideoSource}
+                    onChange={(e) => setSelectedVideoSource(e.target.value)}
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500 appearance-none cursor-pointer"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '20px' }}
+                  >
+                    {videoSources.map((source) => (
+                      <option key={source.id} value={source.id} className="bg-gray-900 text-white">
+                        {source.name} - {source.desc}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Video/Image Display */}
+                <div className="relative max-w-2xl mx-auto">
+                  {selectedVideoSource.startsWith("lasco") ? (
+                    <>
+                      {/* LASCO Coronagraph Animated View */}
+                      <div className="aspect-square bg-black rounded-xl overflow-hidden">
+                        <img
+                          key={lascoImageKey + selectedVideoSource}
+                          src={`https://soho.nascom.nasa.gov/data/realtime/${selectedVideoSource === "lasco-c2" ? "c2" : "c3"}/512/latest.gif?t=${lascoImageKey}`}
+                          alt={`SOHO LASCO ${selectedVideoSource === "lasco-c2" ? "C2" : "C3"} Coronagraph Animation`}
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            // Fallback to static image if GIF fails
+                            (e.target as HTMLImageElement).src = `https://soho.nascom.nasa.gov/data/realtime/${selectedVideoSource === "lasco-c2" ? "c2" : "c3"}/512/latest.jpg`;
+                          }}
+                        />
+                      </div>
+                      <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <span className="text-white text-sm font-medium">ANIMATED</span>
+                          <span className="text-gray-400 text-xs">• LASCO {selectedVideoSource === "lasco-c2" ? "C2" : "C3"}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-center text-sm text-gray-400">
+                        {selectedVideoSource === "lasco-c2"
+                          ? "C2: Inner corona (2-6 solar radii) - Best for early CME detection"
+                          : "C3: Outer corona (3.7-30 solar radii) - Best for tracking CME expansion"
+                        }
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* SDO Video - Embedded */}
+                      <div className="aspect-square bg-black rounded-xl overflow-hidden">
+                        <video
+                          key={selectedVideoSource + lascoImageKey}
+                          src={`https://sdo.gsfc.nasa.gov/assets/img/latest/mpeg/latest_1024_${
+                            selectedVideoSource === "sdo304" ? "0304" :
+                            selectedVideoSource === "sdo131" ? "0131" : "0193"
+                          }.mp4`}
+                          className="w-full h-full object-contain"
+                          controls
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                        >
+                          Your browser does not support the video tag.
+                        </video>
+                      </div>
+                      <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                          <span className="text-white text-sm font-medium">48H VIDEO</span>
+                          <span className="text-gray-400 text-xs">• NASA SDO</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-center text-sm text-gray-400">
+                        {videoSources.find(s => s.id === selectedVideoSource)?.desc} - Last 48 hours of solar activity
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* CME Detection Tips */}
+                <div className="mt-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                  <div className="flex items-start gap-2 text-sm text-yellow-200">
+                    <span className="text-lg">💡</span>
+                    <div>
+                      <strong>How to spot a CME:</strong>
+                      <ul className="mt-1 space-y-1 text-yellow-100/80">
+                        <li>• Look for bright material expanding outward from the Sun</li>
+                        <li>• A <strong>&quot;halo&quot; CME</strong> (expanding ring around Sun) = Earth-directed!</li>
+                        <li>• CMEs appear 20-60 minutes after major flares</li>
+                        <li>• C2 shows inner corona, C3 shows wider field of view</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* X-Ray Flux Chart */}
             {chartData.length > 0 && currentFlare && (
               <div className="bg-black/80 backdrop-blur-lg rounded-2xl border border-white/10 overflow-hidden">
                 <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-4 border-b border-white/10">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-xl font-bold text-white mb-1">Solar Flare Detection</h2>
-                      <p className="text-sm text-gray-400">GOES-16 X-Ray Flux (1-8 Angstrom)</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-gray-500 mb-1">Current</div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-bold" style={{ color: getFlareColor(currentFlare.class) }}>
-                          {currentFlare.class}{currentFlare.intensity.toFixed(1)}
-                        </span>
-                      </div>
-                    </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white mb-1">Solar Flare Detection</h2>
+                    <p className="text-sm text-gray-400">GOES-16 X-Ray Flux (1-8 Angstrom)</p>
                   </div>
                 </div>
 
@@ -448,6 +613,208 @@ export default function SolarFlaresPage() {
                 </div>
               </div>
             )}
+
+            {/* Solar Flare Activity */}
+            <div className="bg-gradient-to-br from-red-900/40 to-orange-900/40 backdrop-blur-lg rounded-2xl border border-red-500/30 overflow-hidden">
+              <div className="bg-gradient-to-r from-red-900/50 to-orange-900/50 p-4 border-b border-red-500/30">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">⚡</span>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Solar Flare Activity</h2>
+                    <p className="text-sm text-orange-200">Recent flares & 24h forecast</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* 24h Flare Probability - Full Width */}
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                  <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                    <span>📊</span> 24h Flare Probability
+                  </h3>
+                  {flareProbability ? (
+                    <div className="space-y-3">
+                      {/* X-class */}
+                      <div>
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span className="text-red-400 font-medium">X-class</span>
+                          <span className="text-white font-bold">{flareProbability.x}%</span>
+                        </div>
+                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-red-500 transition-all"
+                            style={{ width: `${flareProbability.x}%` }}
+                          />
+                        </div>
+                      </div>
+                      {/* M-class */}
+                      <div>
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span className="text-orange-400 font-medium">M-class</span>
+                          <span className="text-white font-bold">{flareProbability.m}%</span>
+                        </div>
+                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-orange-500 transition-all"
+                            style={{ width: `${flareProbability.m}%` }}
+                          />
+                        </div>
+                      </div>
+                      {/* C-class */}
+                      <div>
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span className="text-yellow-400 font-medium">C-class</span>
+                          <span className="text-white font-bold">{flareProbability.c}%</span>
+                        </div>
+                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-yellow-500 transition-all"
+                            style={{ width: `${flareProbability.c}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 text-center mt-2">
+                        Source: NOAA/SWPC
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-gray-500 text-sm text-center py-4">
+                      Loading forecast...
+                    </div>
+                  )}
+                </div>
+
+                {/* X-class and M-class Flares Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Last 3 X-class Flares */}
+                  <div className="bg-red-500/10 rounded-xl p-4 border border-red-500/30">
+                    <h3 className="text-sm font-semibold text-red-300 mb-3 flex items-center gap-2">
+                      <span>🔴</span> Recent X-class Flares
+                    </h3>
+                    {getLast3XClassFlares().length > 0 ? (
+                      <div className="space-y-2">
+                        {getLast3XClassFlares().map((flare, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-2 bg-black/20 rounded-lg"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold bg-red-500/20 text-red-400"
+                              >
+                                {flare.class}{flare.intensity.toFixed(1)}
+                              </div>
+                              <div>
+                                <div className="text-white text-sm font-medium">
+                                  X-class Flare
+                                </div>
+                                <div className="text-gray-500 text-xs">
+                                  {getTimeSince(flare.time)}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-xs bg-red-500/30 text-red-300 px-2 py-1 rounded">
+                              CME Likely
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 text-sm text-center py-4">
+                        No X-class flares in last 7 days
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Last 3 M-class Flares */}
+                  <div className="bg-orange-500/10 rounded-xl p-4 border border-orange-500/30">
+                    <h3 className="text-sm font-semibold text-orange-300 mb-3 flex items-center gap-2">
+                      <span>🟠</span> Recent M-class Flares
+                    </h3>
+                    {getLast3MClassFlares().length > 0 ? (
+                      <div className="space-y-2">
+                        {getLast3MClassFlares().map((flare, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-2 bg-black/20 rounded-lg"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold bg-orange-500/20 text-orange-400"
+                              >
+                                {flare.class}{flare.intensity.toFixed(1)}
+                              </div>
+                              <div>
+                                <div className="text-white text-sm font-medium">
+                                  M-class Flare
+                                </div>
+                                <div className="text-gray-500 text-xs">
+                                  {getTimeSince(flare.time)}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-xs bg-orange-500/30 text-orange-300 px-2 py-1 rounded">
+                              CME Possible
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 text-sm text-center py-4">
+                        No M-class flares in last 7 days
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Last 3 Recent Flares */}
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                  <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                    <span>⚡</span> Last 3 Solar Flares
+                  </h3>
+                  {getLast3Flares().length > 0 ? (
+                    <div className="space-y-2">
+                      {getLast3Flares().map((flare, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 bg-white/5 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold"
+                              style={{
+                                backgroundColor: getFlareColor(flare.class) + "20",
+                                color: getFlareColor(flare.class),
+                              }}
+                            >
+                              {flare.class}{flare.intensity.toFixed(1)}
+                            </div>
+                            <div>
+                              <div className="text-white text-sm font-medium">
+                                {flare.class}-class Flare
+                              </div>
+                              <div className="text-gray-500 text-xs">
+                                {getTimeSince(flare.time)}
+                              </div>
+                            </div>
+                          </div>
+                          {(flare.class === 'M' || flare.class === 'X') && (
+                            <span className="text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded">
+                              CME Possible
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-gray-500 text-sm text-center py-4">
+                      No significant flares recently
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
 
             {/* Recent M and X Class Flare Alerts */}
             {getRecentMajorFlares().length > 0 && (
@@ -614,71 +981,6 @@ export default function SolarFlaresPage() {
               </div>
             )}
 
-            {/* Current Flare Status */}
-            {currentFlare && (
-              <div className="bg-gradient-to-br from-yellow-900/40 to-amber-900/40 backdrop-blur-lg rounded-2xl p-8 border border-yellow-500/30">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <div className="text-gray-400 text-sm mb-2">Current Solar Activity</div>
-                    <div className="flex items-baseline gap-4">
-                      <div
-                        className="text-7xl font-bold"
-                        style={{ color: getFlareColor(currentFlare.class) }}
-                      >
-                        {currentFlare.class}
-                        {currentFlare.intensity.toFixed(1)}
-                      </div>
-                      <div className="text-gray-300">
-                        <div className="text-sm">Class</div>
-                        <div className="text-2xl font-bold">{currentFlare.class}</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-400 mb-2">Detected</div>
-                    <div className="text-xl text-white font-semibold">
-                      {getTimeSince(currentFlare.time)}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {mounted ? formatTime(currentFlare.time) : '--'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4 pt-4 border-t border-white/10">
-                  <div>
-                    <div className="text-sm text-gray-400 mb-2">Description</div>
-                    <div className="text-white">{getFlareDescription(currentFlare.class)}</div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-400 mb-2">X-ray Flux</div>
-                      <div className="text-2xl font-bold text-white">
-                        {currentFlare.flux.toExponential(2)} W/m²
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-400 mb-2">Aurora Probability</div>
-                      <div
-                        className="text-2xl font-bold"
-                        style={{
-                          color: getAuroraProbability(currentFlare.class, currentFlare.intensity)
-                            .color,
-                        }}
-                      >
-                        {getAuroraProbability(currentFlare.class, currentFlare.intensity).level}
-                      </div>
-                      <div className="text-sm text-gray-400">
-                        {getAuroraProbability(currentFlare.class, currentFlare.intensity).percentage}{" "}
-                        chance in 2-3 days
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Classification Guide */}
             <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
               <h2 className="text-xl font-bold text-white mb-4">Solar Flare Classification</h2>
@@ -709,139 +1011,6 @@ export default function SolarFlaresPage() {
               </div>
             </div>
 
-            {/* Recent Significant Flares */}
-            {flareHistory.length > 0 && (
-              <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
-                <h2 className="text-xl font-bold text-white mb-4">
-                  Recent Significant Flares (C-class and above)
-                </h2>
-                <div className="space-y-2">
-                  {flareHistory.map((flare, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div
-                          className="w-16 h-16 rounded-lg flex items-center justify-center text-xl font-bold"
-                          style={{
-                            backgroundColor: getFlareColor(flare.class) + "20",
-                            color: getFlareColor(flare.class),
-                          }}
-                        >
-                          {flare.class}
-                          {flare.intensity.toFixed(1)}
-                        </div>
-                        <div>
-                          <div className="text-white font-medium">
-                            {mounted ? formatTime(flare.time) : '--'}
-                          </div>
-                          <div className="text-sm text-gray-400">
-                            {flare.flux.toExponential(2)} W/m²
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-gray-400">{getTimeSince(flare.time)}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Flare-CME Connection */}
-            <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
-              <h2 className="text-2xl font-bold text-white mb-4">Flares → CMEs → Aurora: The Connection</h2>
-              <div className="space-y-4">
-                <div className="bg-red-500/10 border border-red-500/30 rounded p-4">
-                  <h3 className="text-lg font-semibold text-red-300 mb-2">1. Solar Flare Erupts ⚡</h3>
-                  <p className="text-sm text-gray-300 mb-2">
-                    A solar flare releases electromagnetic radiation (light, X-rays, radio waves) that reaches Earth in just 8 minutes at the speed of light.
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    <strong>Effect on Earth:</strong> Radio blackouts, GPS disruption - but no aurora yet!
-                  </p>
-                </div>
-
-                <div className="bg-orange-500/10 border border-orange-500/30 rounded p-4">
-                  <h3 className="text-lg font-semibold text-orange-300 mb-2">2. CME Launches ☄️</h3>
-                  <p className="text-sm text-gray-300 mb-2">
-                    Strong flares (especially X-class) often launch a Coronal Mass Ejection - billions of tons of magnetized plasma that travels much slower than light.
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    <strong>Timeline:</strong> Check coronagraph images 20-60 minutes after major flare for CME confirmation.
-                  </p>
-                </div>
-
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-4">
-                  <h3 className="text-lg font-semibold text-yellow-300 mb-2">3. CME Travels to Earth 🌍</h3>
-                  <p className="text-sm text-gray-300 mb-2">
-                    If Earth-directed, the CME travels for 1-3 days depending on speed. This is when aurora hunters prepare!
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    <strong>Your window:</strong> From flare detection to aurora = 1-3 days of preparation time.
-                  </p>
-                </div>
-
-                <div className="bg-green-500/10 border border-green-500/30 rounded p-4">
-                  <h3 className="text-lg font-semibold text-green-300 mb-2">4. Aurora! 🌌</h3>
-                  <p className="text-sm text-gray-300 mb-2">
-                    When the CME hits Earth's magnetosphere, if the magnetic field orientation is favorable (Bz south), spectacular aurora displays light up the sky!
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    <strong>Duration:</strong> Aurora can last from a few hours to multiple days depending on CME size and speed.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Flare Class vs CME Probability */}
-            <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
-              <h2 className="text-2xl font-bold text-white mb-4">Flare Class vs CME Launch Probability</h2>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-red-500/10 border border-red-500/30 rounded">
-                  <div>
-                    <div className="text-red-300 font-bold">X-class Flares</div>
-                    <div className="text-xs text-gray-400">Major flares, most powerful</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-red-300">~90%</div>
-                    <div className="text-xs text-gray-400">CME probability</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-orange-500/10 border border-orange-500/30 rounded">
-                  <div>
-                    <div className="text-orange-300 font-bold">M-class Flares</div>
-                    <div className="text-xs text-gray-400">Moderate flares</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-orange-300">~60%</div>
-                    <div className="text-xs text-gray-400">CME probability</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-yellow-500/10 border border-yellow-500/30 rounded">
-                  <div>
-                    <div className="text-yellow-300 font-bold">C-class Flares</div>
-                    <div className="text-xs text-gray-400">Minor flares</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-yellow-300">~20%</div>
-                    <div className="text-xs text-gray-400">CME probability</div>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <p className="text-sm text-gray-300">
-                  <span className="text-aurora-green font-semibold">Key Insight:</span> Flare ≠ CME ≠ Aurora.
-                  <strong> Flares are electromagnetic (instant)</strong>, <strong>CMEs are plasma (slow)</strong>.
-                  A strong flare WITHOUT a CME produces no aurora - just radio effects!
-                </p>
-              </div>
-            </div>
-
             {/* Important Distinction */}
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
               <div className="flex gap-3">
@@ -859,7 +1028,7 @@ export default function SolarFlaresPage() {
                   />
                 </svg>
                 <div className="text-sm text-gray-300">
-                  <p className="font-semibold text-white mb-2">⚠️ Critical: Flare ≠ Guaranteed Aurora!</p>
+                  <p className="font-semibold text-white mb-2">Critical: Flare ≠ Guaranteed Aurora!</p>
                   <p className="mb-2">
                     <strong>What matters for aurora:</strong> Not the flare itself, but whether it launches an <strong>Earth-directed CME</strong>.
                   </p>

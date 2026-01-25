@@ -11,6 +11,23 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Check if user has already completed onboarding
+    const existingUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        onboardingComplete: true,
+        userType: true,
+      },
+    });
+
+    // Prevent account type changes after initial onboarding
+    if (existingUser?.onboardingComplete) {
+      return NextResponse.json(
+        { error: "Onboarding already completed. Account type cannot be changed." },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { userType, ...businessData } = body;
 

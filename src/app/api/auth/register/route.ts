@@ -4,12 +4,21 @@ import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
   try {
-    const { name, email, password } = await request.json();
+    const { username, email, password } = await request.json();
 
     // Validation
-    if (!name || !email || !password) {
+    if (!username || !email || !password) {
       return NextResponse.json(
-        { error: "Name, email, and password are required" },
+        { error: "Username, email, and password are required" },
+        { status: 400 }
+      );
+    }
+
+    // Username validation
+    const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+    if (!usernameRegex.test(username)) {
+      return NextResponse.json(
+        { error: "Username must be 3-20 characters and contain only letters, numbers, and underscores" },
         { status: 400 }
       );
     }
@@ -21,16 +30,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: {
-        email,
-      },
+    // Check if email already exists
+    const existingEmail = await prisma.user.findUnique({
+      where: { email },
     });
 
-    if (existingUser) {
+    if (existingEmail) {
       return NextResponse.json(
         { error: "An account with this email already exists" },
+        { status: 400 }
+      );
+    }
+
+    // Check if username already exists
+    const existingUsername = await prisma.user.findUnique({
+      where: { username },
+    });
+
+    if (existingUsername) {
+      return NextResponse.json(
+        { error: "This username is already taken" },
         { status: 400 }
       );
     }
@@ -41,7 +60,8 @@ export async function POST(request: Request) {
     // Create user
     const user = await prisma.user.create({
       data: {
-        name,
+        username,
+        name: username, // Set name to username by default
         email,
         password: hashedPassword,
       },
@@ -51,7 +71,7 @@ export async function POST(request: Request) {
       {
         user: {
           id: user.id,
-          name: user.name,
+          username: user.username,
           email: user.email,
         },
       },

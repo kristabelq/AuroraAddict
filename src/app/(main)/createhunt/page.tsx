@@ -430,6 +430,13 @@ export default function CreateHuntPage() {
 
           {formData.isPaid && (
             <>
+              {/* Disclaimer */}
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-xs text-amber-200">
+                  <strong>⚠️ Disclaimer:</strong> Aurora Addict is not liable for any transactions between hunt organizers and participants. All payments, refunds, and disputes are handled directly between parties. By creating a paid hunt, you agree to handle all financial matters independently.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium mb-2">Price per pax ($)</label>
                 <input

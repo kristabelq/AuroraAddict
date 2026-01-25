@@ -39,6 +39,27 @@ interface Hunt {
   };
   participants: number; // Confirmed participants count
   waitlistCount?: number; // Waitlisted participants count
+  pendingPaymentCount?: number; // Count of participants awaiting payment confirmation (organizer view)
+}
+
+interface PendingPayment {
+  id: string;
+  odUserId: string; // Used for confirm action
+  userName: string;
+  userUsername: string | null;
+  userImage: string | null;
+  joinedAt: string;
+}
+
+interface HuntWithPendingPayments {
+  id: string;
+  name: string;
+  coverImage: string | null;
+  startDate: string;
+  endDate: string;
+  price: number | null;
+  pendingPayments: PendingPayment[];
+  pendingCount: number;
 }
 
 interface Message {
@@ -63,16 +84,25 @@ type TabType = "hunts" | "my-hunts";
 type HuntFilterType = "all" | "upcoming" | "ongoing" | "past";
 
 export default function HuntsPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+
+  // Redirect if not authenticated
+  if (status === "unauthenticated") {
+    router.push("/auth/signin");
+    return null;
+  }
+
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabType>("hunts");
   const [huntFilter, setHuntFilter] = useState<HuntFilterType>("all");
   const [allHunts, setAllHunts] = useState<Hunt[]>([]);
   const [myHunts, setMyHunts] = useState<Hunt[]>([]);
   const [chats, setChats] = useState<ChatPreview[]>([]);
+  const [pendingPayments, setPendingPayments] = useState<HuntWithPendingPayments[]>([]);
   const [loading, setLoading] = useState(true);
   const [joiningHunt, setJoiningHunt] = useState<string | null>(null);
+  const [confirmingPayment, setConfirmingPayment] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
   // Advanced filter states
@@ -98,6 +128,22 @@ export default function HuntsPage() {
       setHunterName(organizer);
     }
   }, [searchParams]);
+
+  // Fetch pending payments on mount (for badge display)
+  useEffect(() => {
+    const fetchPendingPaymentsOnly = async () => {
+      try {
+        const response = await fetch("/api/hunts/pending-payments");
+        const data = await response.json();
+        if (response.ok && Array.isArray(data)) {
+          setPendingPayments(data);
+        }
+      } catch (error) {
+        console.error("Error fetching pending payments:", error);
+      }
+    };
+    fetchPendingPaymentsOnly();
+  }, []);
 
   useEffect(() => {
     if (activeTab === "hunts") {
@@ -131,21 +177,54 @@ export default function HuntsPage() {
   const fetchMyHunts = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/hunts/my-hunts");
-      const data = await response.json();
+      // Fetch both my hunts and pending payments in parallel
+      const [huntsResponse, pendingResponse] = await Promise.all([
+        fetch("/api/hunts/my-hunts"),
+        fetch("/api/hunts/pending-payments"),
+      ]);
+
+      const huntsData = await huntsResponse.json();
+      const pendingData = await pendingResponse.json();
 
       // Check if response is ok and data is an array
-      if (response.ok && Array.isArray(data)) {
-        setMyHunts(data);
+      if (huntsResponse.ok && Array.isArray(huntsData)) {
+        setMyHunts(huntsData);
       } else {
-        console.error("Failed to fetch my hunts:", data);
+        console.error("Failed to fetch my hunts:", huntsData);
         setMyHunts([]); // Set empty array on error
+      }
+
+      if (pendingResponse.ok && Array.isArray(pendingData)) {
+        setPendingPayments(pendingData);
+      } else {
+        setPendingPayments([]);
       }
     } catch (error) {
       console.error("Error fetching my hunts:", error);
       setMyHunts([]); // Set empty array on error
+      setPendingPayments([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmPayment = async (huntId: string, userId: string) => {
+    setConfirmingPayment(userId);
+    try {
+      const response = await fetch(`/api/hunts/${huntId}/payment/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (response.ok) {
+        // Refresh the data
+        fetchMyHunts();
+      }
+    } catch (error) {
+      console.error("Error confirming payment:", error);
+    } finally {
+      setConfirmingPayment(null);
     }
   };
 
@@ -453,13 +532,18 @@ export default function HuntsPage() {
               </button>
               <button
                 onClick={() => setActiveTab("my-hunts")}
-                className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
+                className={`flex-1 py-2 px-4 rounded-lg transition-colors relative ${
                   activeTab === "my-hunts"
                     ? "bg-aurora-green text-black"
                     : "bg-white/5 text-gray-400 hover:bg-white/10"
                 }`}
               >
                 My Hunts
+                {pendingPayments.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {pendingPayments.reduce((acc, h) => acc + h.pendingCount, 0)}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -1120,6 +1204,89 @@ export default function HuntsPage() {
         {/* My Hunts Tab */}
         {activeTab === "my-hunts" && (
           <div className="p-4">
+            {/* Pending Payment Confirmations Section */}
+            {pendingPayments.length > 0 && (
+              <div className="mb-6">
+                <div className="bg-green-500/10 border-2 border-green-500/30 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="relative">
+                      <svg
+                        className="w-6 h-6 text-green-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                        {pendingPayments.reduce((acc, h) => acc + h.pendingCount, 0)}
+                      </span>
+                    </div>
+                    <h2 className="text-lg font-semibold text-green-200">
+                      Payments to Confirm
+                    </h2>
+                  </div>
+                  <p className="text-sm text-green-200/70 mb-4">
+                    These participants have marked their payment as complete. Confirm once you've received the payment.
+                  </p>
+                  <div className="space-y-4">
+                    {pendingPayments.map((hunt) => (
+                      <div key={hunt.id} className="bg-white/5 rounded-xl p-4">
+                        <div
+                          onClick={() => router.push(`/hunts/${hunt.id}`)}
+                          className="flex items-center gap-3 mb-3 cursor-pointer hover:opacity-80"
+                        >
+                          <img
+                            src={hunt.coverImage || "/default-hunt-cover.svg"}
+                            alt={hunt.name}
+                            className="w-12 h-12 rounded-lg object-cover"
+                          />
+                          <div>
+                            <h3 className="font-medium text-white">{hunt.name}</h3>
+                            <p className="text-xs text-gray-400">
+                              ${hunt.price?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/pax • {hunt.pendingCount} awaiting confirmation
+                            </p>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {hunt.pendingPayments.map((payment) => (
+                            <div
+                              key={payment.id}
+                              className="flex items-center justify-between bg-white/5 rounded-lg p-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={payment.userImage || "/default-avatar.png"}
+                                  alt={payment.userName}
+                                  className="w-10 h-10 rounded-full"
+                                />
+                                <div>
+                                  <p className="text-sm font-medium text-white">{payment.userName}</p>
+                                  <p className="text-xs text-green-400">Marked as paid</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleConfirmPayment(hunt.id, payment.odUserId)}
+                                disabled={confirmingPayment === payment.odUserId}
+                                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                              >
+                                {confirmingPayment === payment.odUserId ? "..." : "Confirm"}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Plan Your Hunt Section */}
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-white mb-3">Plan Your Hunt</h2>
@@ -1303,6 +1470,17 @@ export default function HuntsPage() {
                           </span>
                         )}
                       </div>
+                      {/* Pending Payment Badge - Bottom Left */}
+                      {hunt.isCreator && hunt.pendingPaymentCount && hunt.pendingPaymentCount > 0 && (
+                        <div className="absolute bottom-3 left-3">
+                          <span className="bg-green-500 text-white px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-sm flex items-center gap-1 animate-pulse">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {hunt.pendingPaymentCount} payment{hunt.pendingPaymentCount > 1 ? 's' : ''} to confirm
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Content */}

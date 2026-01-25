@@ -17,33 +17,41 @@ export default function CoronalHolesPage() {
   const [hssList, setHssList] = useState<HSSData[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [solarImageUrl, setSolarImageUrl] = useState<string>("");
+  const [selectedSdoChannel, setSelectedSdoChannel] = useState<string>("0193"); // Default to AIA 193 for coronal holes
+  const [sdoImageKey, setSdoImageKey] = useState(Date.now());
+
+  // SDO image channels - All available from AIA 193 to HMI Dopplergram
+  const sdoChannels = [
+    { id: "0193", name: "AIA 193", desc: "Corona & hot flare plasma", temp: "1.5 million K", best: true },
+    { id: "0211", name: "AIA 211", desc: "Active regions & corona", temp: "2 million K" },
+    { id: "0171", name: "AIA 171", desc: "Quiet corona & coronal loops", temp: "1 million K" },
+    { id: "0304", name: "AIA 304", desc: "Chromosphere - Best for flares", temp: "50,000 K" },
+    { id: "0131", name: "AIA 131", desc: "Flare plasma & hot active regions", temp: "10 million K" },
+    { id: "0335", name: "AIA 335", desc: "Active regions & coronal plasma", temp: "2.5 million K" },
+    { id: "0094", name: "AIA 094", desc: "Hot corona & flare regions", temp: "6.3 million K" },
+    { id: "1600", name: "AIA 1600", desc: "Upper photosphere & transition region", temp: "10,000 K" },
+    { id: "1700", name: "AIA 1700", desc: "Photosphere - Surface temperature", temp: "4,500 K" },
+    { id: "HMIIC", name: "HMI Intensitygram", desc: "Visible light - Sunspots", temp: "Surface" },
+    { id: "HMIB", name: "HMI Magnetogram", desc: "Magnetic field polarity", temp: "Surface" },
+    { id: "HMID", name: "HMI Dopplergram", desc: "Surface velocity & rotation", temp: "Surface" },
+  ];
 
   useEffect(() => {
     fetchHSSData();
-    fetchSolarImage();
-    // Refresh every 30 minutes
+    // Refresh HSS data every 30 minutes
     const interval = setInterval(() => {
       fetchHSSData();
-      fetchSolarImage();
     }, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchSolarImage = async () => {
-    try {
-      // Use Helioviewer API to get latest SDO/AIA 193 image (best for coronal holes)
-      // Documentation: https://api.helioviewer.org/docs/v2/
-      const imageUrl = `https://api.helioviewer.org/v2/getJP2Image/?` +
-        `date=${new Date().toISOString().split('.')[0]}Z` +
-        `&sourceId=8` + // SDO/AIA 193 Å - best wavelength for coronal holes
-        `&display=true`;
-
-      setSolarImageUrl(imageUrl);
-    } catch (error) {
-      console.error("Error fetching solar image:", error);
-    }
-  };
+  // Refresh SDO images every 5 minutes
+  useEffect(() => {
+    const sdoInterval = setInterval(() => {
+      setSdoImageKey(Date.now());
+    }, 5 * 60 * 1000);
+    return () => clearInterval(sdoInterval);
+  }, []);
 
   const fetchHSSData = async () => {
     try {
@@ -150,7 +158,7 @@ export default function CoronalHolesPage() {
                   d="M15 19l-7-7 7-7"
                 />
               </svg>
-              <span className="font-medium">Back to Cosmic Intel</span>
+              <span className="font-medium">Back to Aurora Forecast</span>
             </button>
           </div>
           <div className="flex items-center justify-between">
@@ -178,51 +186,223 @@ export default function CoronalHolesPage() {
           </div>
         ) : (
           <>
-            {/* Latest Solar Image */}
-            {solarImageUrl && (
-              <div className="bg-gradient-to-br from-orange-900/30 to-red-900/30 backdrop-blur-lg rounded-2xl p-6 border border-orange-500/30">
-                <h2 className="text-2xl font-bold text-white mb-3 flex items-center gap-2">
-                  <span className="text-3xl">☀️</span>
-                  Latest Sun Image - Coronal Holes Visible as Dark Regions
-                </h2>
-                <a
-                  href="https://solarham.net"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block bg-black rounded-xl overflow-hidden mb-3 cursor-pointer hover:ring-2 hover:ring-orange-500 transition-all"
-                >
-                  <img
-                    src={solarImageUrl}
-                    alt="Latest Sun image from SDO/AIA 193Å showing coronal holes"
-                    className="w-full h-auto"
-                    onError={(e) => {
-                      // Fallback if Helioviewer API has issues
-                      (e.target as HTMLImageElement).src = "https://soho.nascom.nasa.gov/data/realtime/eit_195/1024/latest.jpg";
-                    }}
-                  />
-                </a>
-                <p className="text-xs text-gray-400 italic">
-                  Image from NASA Solar Dynamics Observatory (SDO) at 193 Angstroms wavelength.
-                  Coronal holes appear as dark areas. Updates every 30 minutes. Click for more data on SolarHam.net
-                </p>
-              </div>
-            )}
+            {/* Predicted Next HSS */}
+            {hssList.length > 0 && (() => {
+              // Calculate predicted next HSS based on most recent event + 27 days
+              const sortedEvents = [...hssList].sort((a, b) =>
+                new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime()
+              );
+              const mostRecentEvent = sortedEvents[0];
+              const mostRecentDate = new Date(mostRecentEvent.eventTime);
+              const predictedDate = new Date(mostRecentDate);
+              predictedDate.setDate(predictedDate.getDate() + 27);
 
-            {/* What is a Coronal Hole? */}
-            <div className="bg-gradient-to-br from-violet-900/40 to-fuchsia-900/40 backdrop-blur-lg rounded-2xl p-6 border border-violet-500/30">
-              <h2 className="text-2xl font-bold text-white mb-3 flex items-center gap-2">
-                <span className="text-3xl">💡</span>
-                What are Coronal Holes?
-              </h2>
-              <p className="text-gray-200 mb-3">
-                <strong>Coronal holes</strong> are areas on the Sun where the magnetic field opens up into space, allowing solar wind to escape at high speed. These regions <strong>appear as dark areas</strong> in extreme ultraviolet and X-ray images of the Sun (see image above).
-              </p>
-              <p className="text-gray-200 mb-3">
-                When coronal holes face Earth, they send <strong>High Speed Streams (HSS)</strong> of solar wind our way, traveling at 500-800 km/s - much faster than normal solar wind.
-              </p>
-              <p className="text-gray-200">
-                <span className="text-aurora-green font-semibold">Why they matter for aurora hunting:</span> Coronal holes produce predictable, moderate aurora activity (Kp 4-6) lasting 2-5 days. Perfect for planning multi-day aurora photography trips!
-              </p>
+              // Calculate date range (±2 days for prediction uncertainty)
+              const rangeStart = new Date(predictedDate);
+              rangeStart.setDate(rangeStart.getDate() - 2);
+              const rangeEnd = new Date(predictedDate);
+              rangeEnd.setDate(rangeEnd.getDate() + 2);
+
+              const formatPredictionDate = (date: Date) => {
+                return date.toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric"
+                });
+              };
+
+              const isPredictionFuture = predictedDate.getTime() > new Date().getTime();
+
+              return isPredictionFuture ? (
+                <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 backdrop-blur-lg rounded-xl p-6 border border-purple-500/30">
+                  <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                    <span className="text-2xl">🔮</span>
+                    Predicted Next HSS Event
+                  </h2>
+                  <div className="bg-white/10 rounded-lg p-4 mb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="text-sm text-gray-400 mb-1">Expected Date Range</div>
+                        <div className="text-xl font-bold text-purple-300">
+                          {formatPredictionDate(rangeStart)} - {formatPredictionDate(rangeEnd)}
+                        </div>
+                        <div className="text-sm text-gray-400 mt-1">
+                          Peak: {formatPredictionDate(predictedDate)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-gray-400 mb-1">Expected Kp</div>
+                        <div className="text-2xl font-bold text-yellow-400">4-6</div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-300 bg-white/10 rounded p-3">
+                      <span className="font-semibold text-purple-300">📊 Based on 27-day solar rotation cycle</span>
+                      <br />
+                      Previous HSS: {formatTime(mostRecentEvent.eventTime)}
+                      <br />
+                      <span className="text-gray-400 text-xs mt-1 block">
+                        * Prediction accuracy ±2 days. Coronal holes may evolve, merge, or dissipate between rotations.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
+            {/* Live Sun View - SDO Images */}
+            <div className="bg-gradient-to-br from-orange-900/30 to-red-900/30 backdrop-blur-lg rounded-2xl border border-orange-500/30 overflow-hidden">
+              <div className="bg-gradient-to-r from-orange-900/50 to-red-900/50 p-4 border-b border-orange-500/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">☀️</span>
+                    <div>
+                      <h2 className="text-xl font-bold text-white">Live Sun View</h2>
+                      <p className="text-sm text-orange-200">NASA Solar Dynamics Observatory (SDO) - Updated every 15 minutes</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSdoImageKey(Date.now())}
+                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm text-white transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4">
+                {/* Coronal hole tip */}
+                <div className="mb-4 bg-violet-500/20 border border-violet-500/30 rounded-lg p-3">
+                  <div className="flex items-start gap-2 text-sm">
+                    <span className="text-lg">💡</span>
+                    <div className="text-violet-200">
+                      <strong>Tip:</strong> Coronal holes appear as <strong>dark regions</strong> in AIA 193 and AIA 211.
+                      These dark areas are where high-speed solar wind escapes into space!
+                    </div>
+                  </div>
+                </div>
+
+                {/* Channel dropdown selector */}
+                <div className="mb-4">
+                  <select
+                    value={selectedSdoChannel}
+                    onChange={(e) => setSelectedSdoChannel(e.target.value)}
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none cursor-pointer"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '20px' }}
+                  >
+                    {sdoChannels.map((channel) => (
+                      <option key={channel.id} value={channel.id} className="bg-gray-900 text-white">
+                        {channel.name} - {channel.desc} {channel.best ? "(Best for Coronal Holes)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Selected channel info */}
+                <div className="mb-4 text-center">
+                  <div className="text-lg font-semibold text-white">
+                    {sdoChannels.find(c => c.id === selectedSdoChannel)?.name}
+                    {sdoChannels.find(c => c.id === selectedSdoChannel)?.best && (
+                      <span className="ml-2 text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">Best for Coronal Holes</span>
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    {sdoChannels.find(c => c.id === selectedSdoChannel)?.desc} • {sdoChannels.find(c => c.id === selectedSdoChannel)?.temp}
+                  </div>
+                </div>
+
+                {/* SDO Image with Navigation Arrows */}
+                <div className="relative max-w-2xl mx-auto">
+                  {/* Left Arrow */}
+                  <button
+                    onClick={() => {
+                      const currentIndex = sdoChannels.findIndex(c => c.id === selectedSdoChannel);
+                      const prevIndex = currentIndex === 0 ? sdoChannels.length - 1 : currentIndex - 1;
+                      setSelectedSdoChannel(sdoChannels[prevIndex].id);
+                    }}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+                  >
+                    <svg className="w-6 h-6 text-white group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Image */}
+                  <div className="aspect-square bg-black rounded-xl overflow-hidden">
+                    <img
+                      key={sdoImageKey + selectedSdoChannel}
+                      src={`https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_${selectedSdoChannel}.jpg?t=${sdoImageKey}`}
+                      alt={`Sun - ${sdoChannels.find(c => c.id === selectedSdoChannel)?.name}`}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/sun-placeholder.png";
+                      }}
+                    />
+                  </div>
+
+                  {/* Right Arrow */}
+                  <button
+                    onClick={() => {
+                      const currentIndex = sdoChannels.findIndex(c => c.id === selectedSdoChannel);
+                      const nextIndex = currentIndex === sdoChannels.length - 1 ? 0 : currentIndex + 1;
+                      setSelectedSdoChannel(sdoChannels[nextIndex].id);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center transition-all group"
+                  >
+                    <svg className="w-6 h-6 text-white group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+
+                  {/* Live indicator */}
+                  <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-white text-sm font-medium">LIVE</span>
+                      <span className="text-gray-400 text-xs">• NASA SDO</span>
+                    </div>
+                  </div>
+
+                  {/* Image counter */}
+                  <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                    <span className="text-white text-sm">
+                      {sdoChannels.findIndex(c => c.id === selectedSdoChannel) + 1} / {sdoChannels.length}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Dot indicators */}
+                <div className="mt-4 flex justify-center gap-1.5">
+                  {sdoChannels.map((channel) => (
+                    <button
+                      key={channel.id}
+                      onClick={() => setSelectedSdoChannel(channel.id)}
+                      className={`w-2 h-2 rounded-full transition-all ${
+                        selectedSdoChannel === channel.id
+                          ? "bg-orange-500 w-4"
+                          : "bg-white/30 hover:bg-white/50"
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                {/* Link to SolarHam */}
+                <div className="mt-4 text-center">
+                  <a
+                    href="https://solarham.net"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-orange-300 hover:text-orange-200 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    More solar data on SolarHam.net
+                  </a>
+                </div>
+              </div>
             </div>
 
             {/* Active/Upcoming HSS Events */}
@@ -345,69 +525,6 @@ export default function CoronalHolesPage() {
               </div>
             )}
 
-            {/* Predicted Next HSS */}
-            {hssList.length > 0 && (() => {
-              // Calculate predicted next HSS based on most recent event + 27 days
-              const sortedEvents = [...hssList].sort((a, b) =>
-                new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime()
-              );
-              const mostRecentEvent = sortedEvents[0];
-              const mostRecentDate = new Date(mostRecentEvent.eventTime);
-              const predictedDate = new Date(mostRecentDate);
-              predictedDate.setDate(predictedDate.getDate() + 27);
-
-              // Calculate date range (±2 days for prediction uncertainty)
-              const rangeStart = new Date(predictedDate);
-              rangeStart.setDate(rangeStart.getDate() - 2);
-              const rangeEnd = new Date(predictedDate);
-              rangeEnd.setDate(rangeEnd.getDate() + 2);
-
-              const formatPredictionDate = (date: Date) => {
-                return date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric"
-                });
-              };
-
-              const isPredictionFuture = predictedDate.getTime() > new Date().getTime();
-
-              return isPredictionFuture ? (
-                <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 backdrop-blur-lg rounded-xl p-6 border border-purple-500/30">
-                  <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <span className="text-2xl">🔮</span>
-                    Predicted Next HSS Event
-                  </h2>
-                  <div className="bg-white/10 rounded-lg p-4 mb-3">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-sm text-gray-400 mb-1">Expected Date Range</div>
-                        <div className="text-xl font-bold text-purple-300">
-                          {formatPredictionDate(rangeStart)} - {formatPredictionDate(rangeEnd)}
-                        </div>
-                        <div className="text-sm text-gray-400 mt-1">
-                          Peak: {formatPredictionDate(predictedDate)}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-gray-400 mb-1">Expected Kp</div>
-                        <div className="text-2xl font-bold text-yellow-400">4-6</div>
-                      </div>
-                    </div>
-                    <div className="text-sm text-gray-300 bg-white/10 rounded p-3">
-                      <span className="font-semibold text-purple-300">📊 Based on 27-day solar rotation cycle</span>
-                      <br />
-                      Previous HSS: {formatTime(mostRecentEvent.eventTime)}
-                      <br />
-                      <span className="text-gray-400 text-xs mt-1 block">
-                        * Prediction accuracy ±2 days. Coronal holes may evolve, merge, or dissipate between rotations.
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ) : null;
-            })()}
-
             {/* Recent HSS History (Last 30 Days) */}
             {hssList.length > 0 && (
               <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
@@ -443,6 +560,23 @@ export default function CoronalHolesPage() {
                 </div>
               </div>
             )}
+
+            {/* What is a Coronal Hole? */}
+            <div className="bg-gradient-to-br from-violet-900/40 to-fuchsia-900/40 backdrop-blur-lg rounded-2xl p-6 border border-violet-500/30">
+              <h2 className="text-2xl font-bold text-white mb-3 flex items-center gap-2">
+                <span className="text-3xl">💡</span>
+                What are Coronal Holes?
+              </h2>
+              <p className="text-gray-200 mb-3">
+                <strong>Coronal holes</strong> are areas on the Sun where the magnetic field opens up into space, allowing solar wind to escape at high speed. These regions <strong>appear as dark areas</strong> in extreme ultraviolet and X-ray images of the Sun (see image above).
+              </p>
+              <p className="text-gray-200 mb-3">
+                When coronal holes face Earth, they send <strong>High Speed Streams (HSS)</strong> of solar wind our way, traveling at 500-800 km/s - much faster than normal solar wind.
+              </p>
+              <p className="text-gray-200">
+                <span className="text-aurora-green font-semibold">Why they matter for aurora hunting:</span> Coronal holes produce predictable, moderate aurora activity (Kp 4-6) lasting 2-5 days. Perfect for planning multi-day aurora photography trips!
+              </p>
+            </div>
 
             {/* Coronal Hole Characteristics */}
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-6">
@@ -490,74 +624,6 @@ export default function CoronalHolesPage() {
               </div>
             </div>
 
-            {/* Comparison: Coronal Holes vs CMEs */}
-            <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
-              <h2 className="text-2xl font-bold text-white mb-4">Coronal Holes vs CMEs</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-violet-500/10 border border-violet-500/30 rounded-lg p-4">
-                  <h3 className="text-lg font-bold text-violet-300 mb-3">🕳️ Coronal Holes (HSS)</h3>
-                  <ul className="text-sm text-gray-300 space-y-2">
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-400">✓</span>
-                      <span>Predictable ~27-day cycle</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-400">✓</span>
-                      <span>Lasts 2-5 days (multiple nights)</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-400">✓</span>
-                      <span>Kp 4-6 (moderate, reliable)</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-400">✓</span>
-                      <span>Great for planning trips</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-400">✓</span>
-                      <span>Consistent performance</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                  <h3 className="text-lg font-bold text-red-300 mb-3">☄️ CMEs</h3>
-                  <ul className="text-sm text-gray-300 space-y-2">
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-400">•</span>
-                      <span>Unpredictable (no cycle)</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-400">•</span>
-                      <span>Usually lasts 6-24 hours</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-400">•</span>
-                      <span>Kp 5-9 (can be extreme)</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-400">•</span>
-                      <span>Short notice (1-3 days)</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-400">•</span>
-                      <span>Performance varies (Bz dependent)</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            {/* Best Strategy */}
-            <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-              <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                <span>🎯</span>
-                Best Strategy for Aurora Hunting:
-              </h3>
-              <p className="text-sm text-gray-300">
-                <strong className="text-green-400">Plan your trips around coronal holes</strong> (predictable, multi-day events), but stay flexible for CME alerts (shorter notice, potentially more spectacular). This gives you the best of both worlds: reliable aurora activity with a chance for extraordinary displays!
-              </p>
-            </div>
           </>
         )}
       </div>

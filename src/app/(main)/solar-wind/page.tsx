@@ -1,8 +1,7 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import TimeHeader from "@/components/TimeHeader";
 
 interface SolarWindData {
@@ -16,24 +15,10 @@ interface SolarWindData {
 }
 
 export default function SolarWindPage() {
-  const { data: session, status } = useSession();
   const router = useRouter();
   const [solarWind, setSolarWind] = useState<SolarWindData | null>(null);
   const [solarWindHistory, setSolarWindHistory] = useState<SolarWindData[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (status === "loading") return;
-
-    if (status === "unauthenticated") {
-      router.push("/auth/signin");
-      return;
-    }
-
-    if (session?.user && !session.user.onboardingComplete) {
-      router.push("/onboarding");
-    }
-  }, [session, status, router]);
 
   useEffect(() => {
     fetchSolarWindData();
@@ -262,7 +247,138 @@ export default function SolarWindPage() {
     return '#ef4444'; // red-500 - low (<3 p/cm³)
   };
 
-  if (status === "loading" || loading) {
+  // Calculate arrival time from L1 to Earth based on solar wind speed
+  const calculateArrivalTime = (speed: number): number => {
+    // L1 is approximately 1.5 million km from Earth
+    const L1_DISTANCE_KM = 1500000;
+    const travelTimeMinutes = (L1_DISTANCE_KM / speed) / 60;
+    return Math.round(travelTimeMinutes);
+  };
+
+  // Check if aurora-favorable conditions are incoming
+  const getIncomingAuroraAlert = () => {
+    if (!solarWind || solarWindHistory.length < 6) return null;
+
+    const arrivalMins = calculateArrivalTime(solarWind.speed);
+    const isFavorable = solarWind.bz < -5 && solarWind.speed > 400 && solarWind.density > 2;
+    const isStronglyFavorable = solarWind.bz < -10 && solarWind.speed > 500 && solarWind.density > 5;
+
+    if (isStronglyFavorable) {
+      return {
+        level: "HIGH",
+        color: "#22c55e",
+        borderColor: "#16a34a",
+        message: "Strong aurora conditions detected at L1!",
+        arrivalMins,
+      };
+    } else if (isFavorable) {
+      return {
+        level: "MODERATE",
+        color: "#eab308",
+        borderColor: "#ca8a04",
+        message: "Favorable aurora conditions detected at L1",
+        arrivalMins,
+      };
+    }
+    return null;
+  };
+
+  // Calculate energy loading into magnetosphere (simplified model)
+  const calculateEnergyLoading = (): { percentage: number; status: string; timeToSubstorm: number | null } => {
+    if (!solarWind || solarWindHistory.length < 12) {
+      return { percentage: 0, status: "Unknown", timeToSubstorm: null };
+    }
+
+    // Calculate cumulative energy from sustained southward Bz
+    let energy = 0;
+    let sustainedMinutes = 0;
+
+    // Look at last hour of data
+    const recentData = solarWindHistory.slice(-12);
+    for (const point of recentData) {
+      if (point.bz < 0) {
+        // Energy input proportional to |Bz| * speed * sqrt(density)
+        const inputRate = Math.abs(point.bz) * (point.speed / 400) * Math.sqrt(Math.max(point.density, 1) / 5);
+        energy += inputRate * 5; // 5 minutes per data point
+        sustainedMinutes += 5;
+      } else {
+        // Reset if Bz turns north
+        energy = Math.max(0, energy - 10);
+      }
+    }
+
+    // Normalize to 0-100%
+    const percentage = Math.min(100, Math.round(energy / 3));
+
+    let status = "Low";
+    let timeToSubstorm: number | null = null;
+
+    if (percentage >= 80) {
+      status = "Critical - Substorm imminent";
+      timeToSubstorm = 10;
+    } else if (percentage >= 60) {
+      status = "High - Substorm likely";
+      timeToSubstorm = 20;
+    } else if (percentage >= 40) {
+      status = "Moderate - Building";
+      timeToSubstorm = 45;
+    } else if (percentage >= 20) {
+      status = "Low - Charging";
+    }
+
+    return { percentage, status, timeToSubstorm };
+  };
+
+  // Generate 60-minute forecast timeline
+  const generate60MinForecast = () => {
+    if (!solarWind || solarWindHistory.length < 12) return [];
+
+    const arrivalMins = calculateArrivalTime(solarWind.speed);
+    const forecast = [];
+
+    // Current conditions (arriving in ~arrivalMins)
+    forecast.push({
+      timeLabel: `+${arrivalMins} min`,
+      description: "Current L1 readings arrive",
+      bz: solarWind.bz,
+      speed: solarWind.speed,
+      density: solarWind.density,
+      potential: solarWind.bz < -10 ? "High" : solarWind.bz < -5 ? "Moderate" : solarWind.bz < 0 ? "Low" : "Minimal",
+    });
+
+    // Use historical data to project what will arrive at different times
+    // Data from 15 min ago at L1 will arrive in (arrivalMins - 15) from now
+    const intervals = [15, 30, 45];
+    for (const minsAgo of intervals) {
+      const dataPointsAgo = Math.floor(minsAgo / 5);
+      const historyIndex = solarWindHistory.length - 1 - dataPointsAgo;
+
+      if (historyIndex >= 0) {
+        const point = solarWindHistory[historyIndex];
+        const arrivalFromNow = Math.max(0, arrivalMins - minsAgo);
+
+        if (arrivalFromNow <= 60 && arrivalFromNow > 0) {
+          forecast.push({
+            timeLabel: arrivalFromNow === 0 ? "Now" : `+${arrivalFromNow} min`,
+            description: `L1 data from ${minsAgo}min ago`,
+            bz: point.bz,
+            speed: point.speed,
+            density: point.density,
+            potential: point.bz < -10 ? "High" : point.bz < -5 ? "Moderate" : point.bz < 0 ? "Low" : "Minimal",
+          });
+        }
+      }
+    }
+
+    // Sort by arrival time (soonest first)
+    return forecast.sort((a, b) => {
+      const timeA = parseInt(a.timeLabel.replace(/[^0-9]/g, '')) || 0;
+      const timeB = parseInt(b.timeLabel.replace(/[^0-9]/g, '')) || 0;
+      return timeA - timeB;
+    });
+  };
+
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-xl">Loading...</div>
@@ -319,201 +435,118 @@ export default function SolarWindPage() {
           </p>
         </div>
 
-        {/* Aurora Score Meter */}
-        <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-xl p-6 mb-6 border border-purple-500/30">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="text-sm text-gray-400 mb-1">Aurora Potential Score</div>
-              <div className="flex items-center gap-3">
-                <div className="text-5xl font-bold" style={{ color: potential.color }}>
-                  {score}
+        {/* Conditions Preview - What's Coming */}
+        <div className="bg-gradient-to-r from-cyan-900/30 to-blue-900/30 rounded-xl p-4 mb-6 border border-cyan-500/30">
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            <h3 className="text-lg font-semibold text-white">Conditions Arriving at Earth</h3>
+          </div>
+          <div className="bg-black/30 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm text-gray-400">Estimated arrival:</span>
+              <span className="text-lg font-bold text-cyan-400">~{calculateArrivalTime(solarWind.speed)} minutes</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-white/5 rounded-lg p-2">
+                <div className="text-xs text-gray-400 mb-1">Bz</div>
+                <div className="text-lg font-bold" style={{ color: getBzColor(solarWind.bz) }}>
+                  {solarWind.bz >= 0 ? '+' : ''}{solarWind.bz.toFixed(1)} nT
                 </div>
-                <div className="text-gray-400">/100</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-2">
+                <div className="text-xs text-gray-400 mb-1">Speed</div>
+                <div className="text-lg font-bold" style={{ color: getSpeedColor(solarWind.speed) }}>
+                  {solarWind.speed.toFixed(0)} km/s
+                </div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-2">
+                <div className="text-xs text-gray-400 mb-1">Density</div>
+                <div className="text-lg font-bold" style={{ color: getDensityColor(solarWind.density) }}>
+                  {solarWind.density.toFixed(1)} p/cm³
+                </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-xs text-gray-400 mb-2">Trend</div>
-              <div className="flex items-center gap-2">
-                {trend.direction === "improving" && (
-                  <>
-                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7"/>
-                    </svg>
-                    <span className="text-sm text-green-400 font-semibold">Improving</span>
-                  </>
-                )}
-                {trend.direction === "worsening" && (
-                  <>
-                    <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7"/>
-                    </svg>
-                    <span className="text-sm text-red-400 font-semibold">Worsening</span>
-                  </>
-                )}
-                {trend.direction === "stable" && (
-                  <>
-                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 12h14"/>
-                    </svg>
-                    <span className="text-sm text-gray-400 font-semibold">Stable</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="relative h-4 bg-gray-800 rounded-full overflow-hidden mb-4">
-            <div
-              className="h-full transition-all duration-500 rounded-full"
-              style={{
-                width: `${score}%`,
-                background: `linear-gradient(to right, ${score > 70 ? '#dc2626' : score > 45 ? '#f59e0b' : '#10b981'}, ${potential.color})`
-              }}
-            />
-            {/* Threshold markers */}
-            <div className="absolute top-0 left-[45%] w-0.5 h-full bg-white/30" />
-            <div className="absolute top-0 left-[70%] w-0.5 h-full bg-white/30" />
-          </div>
-
-          {/* Additional Info */}
-          <div className="flex gap-4 text-xs">
-            {duration > 0 && (
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <span className="text-gray-300">
-                  Bz south for <span className="text-cyan-400 font-semibold">{duration} min</span>
-                </span>
-              </div>
-            )}
-            {solarWind.speed > 500 && (
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                </svg>
-                <span className="text-gray-300">
-                  <span className="text-orange-400 font-semibold">Fast</span> solar wind
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Aurora Potential Alert */}
-        <div
-          className="p-4 rounded-xl mb-6 border-2"
-          style={{
-            backgroundColor: `${potential.color}20`,
-            borderColor: potential.color
-          }}
-        >
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0">
-              {potential.level === "EXCELLENT" && (
-                <svg className="w-8 h-8" style={{ color: potential.color }} fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
-                </svg>
-              )}
-              {potential.level === "STRONG" && (
-                <svg className="w-8 h-8" style={{ color: potential.color }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                </svg>
-              )}
-              {(potential.level === "MODERATE" || potential.level === "WEAK" || potential.level === "Minimal") && (
-                <svg className="w-8 h-8" style={{ color: potential.color }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="font-bold text-lg mb-2" style={{ color: potential.color }}>
-                Aurora Potential: {potential.level}
-              </div>
-              <p className="text-sm text-gray-300 mb-2">{potential.message}</p>
-              <p className="text-sm font-semibold text-white">{potential.recommendation}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Solar Wind Metrics Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-          {/* Bz - Most Important */}
-          <div className="bg-white/10 rounded-xl p-4 border-2 border-purple-500/50">
-            <div className="text-xs text-gray-400 mb-1 flex items-center gap-2">
-              <span>Bz (North-South)</span>
-              <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
-              </svg>
-            </div>
-            <div className="text-3xl font-bold mb-1" style={{ color: getBzColor(solarWind.bz) }}>
-              {solarWind.bz >= 0 ? '+' : ''}{solarWind.bz.toFixed(1)} nT
-            </div>
-            <div className="text-xs text-gray-300">
-              {solarWind.bz < 0 ? '⬇️ SOUTH (GOOD!)' : '⬆️ NORTH (BAD)'}
-            </div>
-            <div className="text-xs text-gray-400 mt-2">
-              Key factor for aurora
-            </div>
-          </div>
-
-          {/* Bt - Total Field Strength */}
-          <div className="bg-white/5 rounded-xl p-4">
-            <div className="text-xs text-gray-400 mb-1">Bt (Total Field)</div>
-            <div className="text-2xl font-bold mb-1" style={{ color: getBtColor(solarWind.bt) }}>
-              {solarWind.bt.toFixed(1)} nT
-            </div>
-            <div className="text-xs text-gray-400 mt-2">
-              {solarWind.bt > 30 ? 'Very Strong' : solarWind.bt > 20 ? 'Strong' : solarWind.bt > 10 ? 'Above Normal' : 'Normal (2-10 nT)'}
-            </div>
-          </div>
-
-          {/* Solar Wind Speed */}
-          <div className="bg-white/5 rounded-xl p-4">
-            <div className="text-xs text-gray-400 mb-1">Wind Speed</div>
-            <div className="text-2xl font-bold mb-1" style={{ color: getSpeedColor(solarWind.speed) }}>
-              {solarWind.speed.toFixed(0)} km/s
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              {solarWind.speed > 500 && (
-                <svg className="w-4 h-4" style={{ color: getSpeedColor(solarWind.speed) }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18"/>
-                </svg>
-              )}
-              <span className="text-xs text-gray-400">
-                {solarWind.speed > 600 ? 'Very Fast' : solarWind.speed > 500 ? 'Fast' : solarWind.speed > 400 ? 'Moderate' : 'Normal (300-500 km/s)'}
+            <div className="mt-3 text-center">
+              <span className="text-sm text-gray-400">Aurora potential on arrival: </span>
+              <span className={`font-semibold ${solarWind.bz < -10 ? 'text-green-400' : solarWind.bz < -5 ? 'text-yellow-400' : solarWind.bz < 0 ? 'text-orange-400' : 'text-red-400'}`}>
+                {solarWind.bz < -10 ? 'HIGH' : solarWind.bz < -5 ? 'MODERATE' : solarWind.bz < 0 ? 'LOW' : 'MINIMAL'}
               </span>
             </div>
           </div>
-
-          {/* Bx */}
-          <div className="bg-white/5 rounded-xl p-4">
-            <div className="text-xs text-gray-400 mb-1">Bx (Sun-Earth)</div>
-            <div className="text-xl font-bold text-gray-300">
-              {solarWind.bx >= 0 ? '+' : ''}{solarWind.bx.toFixed(1)} nT
-            </div>
-          </div>
-
-          {/* By */}
-          <div className="bg-white/5 rounded-xl p-4">
-            <div className="text-xs text-gray-400 mb-1">By (East-West)</div>
-            <div className="text-xl font-bold text-gray-300">
-              {solarWind.by >= 0 ? '+' : ''}{solarWind.by.toFixed(1)} nT
-            </div>
-          </div>
-
-          {/* Density */}
-          <div className="bg-white/5 rounded-xl p-4">
-            <div className="text-xs text-gray-400 mb-1">Density</div>
-            <div className="text-xl font-bold" style={{ color: getDensityColor(solarWind.density) }}>
-              {solarWind.density.toFixed(1)} p/cm³
-            </div>
-            <div className="text-xs text-gray-400 mt-2">
-              {solarWind.density > 50 ? 'Extreme' : solarWind.density > 20 ? 'High' : solarWind.density > 8 ? 'Enhanced' : solarWind.density > 3 ? 'Normal' : 'Low'}
-            </div>
-          </div>
         </div>
+
+        {/* 60-Minute Forecast Timeline */}
+        {(() => {
+          const forecast = generate60MinForecast();
+          if (forecast.length === 0) return null;
+
+          return (
+            <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/10">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="text-lg font-semibold text-white">60-Minute Aurora Forecast</h3>
+              </div>
+              <p className="text-xs text-gray-400 mb-4">
+                What conditions will reach Earth based on L1 satellite data
+              </p>
+
+              <div className="space-y-2">
+                {forecast.map((item, index) => {
+                  const potentialColor = item.potential === "High" ? "#22c55e" : item.potential === "Moderate" ? "#eab308" : item.potential === "Low" ? "#f97316" : "#6b7280";
+
+                  return (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-black/30"
+                    >
+                      {/* Time badge */}
+                      <div className="w-12 sm:w-14 flex-shrink-0 text-center">
+                        <span className="text-xs sm:text-sm font-bold text-cyan-400">{item.timeLabel}</span>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="w-px h-8 bg-white/20 flex-shrink-0" />
+
+                      {/* Conditions */}
+                      <div className="flex-1 flex items-center gap-2 sm:gap-4 text-xs min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-400">Bz: </span>
+                          <span style={{ color: getBzColor(item.bz) }} className="font-semibold">
+                            {item.bz >= 0 ? '+' : ''}{item.bz.toFixed(1)}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-400">Speed: </span>
+                          <span style={{ color: getSpeedColor(item.speed) }} className="font-semibold">
+                            {item.speed.toFixed(0)}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-400">Density: </span>
+                          <span style={{ color: getDensityColor(item.density) }} className="font-semibold">
+                            {item.density.toFixed(1)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Potential badge */}
+                      <div
+                        className="px-1.5 sm:px-2 py-1 rounded text-xs font-semibold flex-shrink-0"
+                        style={{ backgroundColor: `${potentialColor}30`, color: potentialColor }}
+                      >
+                        {item.potential}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Bz Trend Chart - Last 3 Hours */}
         {solarWindHistory.length > 0 && (
@@ -546,28 +579,12 @@ export default function SolarWindPage() {
                   </defs>
                   <rect width="100%" height="100%" fill="url(#bzGradient)" />
 
-                  {/* Plot line */}
-                  <polyline
-                    points={solarWindHistory
-                      .slice(-36) // Last 3 hours (36 points at 5-min intervals)
-                      .map((point, i, arr) => {
-                        const x = (i / (arr.length - 1)) * 100;
-                        // Map Bz from -20 to +20 range to 100% to 0% (inverted Y)
-                        const y = ((20 - point.bz) / 40) * 100;
-                        return `${x},${y}`;
-                      })
-                      .join(" ")}
-                    fill="none"
-                    stroke="#a78bfa"
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-
                   {/* Plot points */}
                   {solarWindHistory.slice(-36).map((point, i, arr) => {
                     const x = (i / (arr.length - 1)) * 100;
                     const y = ((20 - point.bz) / 40) * 100;
-                    const isSouth = point.bz < 0;
+                    // Color: green for strongly south (< -5), yellow for weakly south (-5 to 0), red for north (>= 0)
+                    const dotColor = point.bz >= 0 ? "#ef4444" : point.bz > -5 ? "#eab308" : "#10b981";
 
                     return (
                       <circle
@@ -575,7 +592,7 @@ export default function SolarWindPage() {
                         cx={`${x}%`}
                         cy={`${y}%`}
                         r="3"
-                        fill={isSouth ? "#10b981" : "#ef4444"}
+                        fill={dotColor}
                         vectorEffect="non-scaling-stroke"
                       />
                     );
@@ -593,18 +610,201 @@ export default function SolarWindPage() {
             </div>
 
             {/* Legend */}
-            <div className="flex gap-4 mt-4 text-xs">
+            <div className="flex flex-wrap gap-4 mt-4 text-xs">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-green-500" />
-                <span className="text-gray-300">South (Good for aurora)</span>
+                <span className="text-gray-300">Strong South (Good)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                <span className="text-gray-300">Weak South (Marginal)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-red-500" />
-                <span className="text-gray-300">North (Bad for aurora)</span>
+                <span className="text-gray-300">North (Bad)</span>
               </div>
             </div>
           </div>
         )}
+
+        {/* Solar Wind Metrics Grid */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+          {/* Row 1: Bz, Speed, Density (with color codes) */}
+
+          {/* Bz - Most Important */}
+          <div className="bg-white/10 rounded-xl p-3 sm:p-4 border-2 border-purple-500/50">
+            <div className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+              <span>Bz (North-South)</span>
+              <svg className="w-3 h-3 sm:w-4 sm:h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+              </svg>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold" style={{ color: getBzColor(solarWind.bz) }}>
+              {solarWind.bz >= 0 ? '+' : ''}{solarWind.bz.toFixed(1)} nT
+            </div>
+            <div className="text-xs text-gray-300 mt-1">
+              {solarWind.bz < 0 ? '⬇️ SOUTH (GOOD!)' : '⬆️ NORTH (BAD)'}
+            </div>
+            <div className="text-xs text-gray-400 mt-1 hidden sm:block">
+              Key factor for aurora
+            </div>
+          </div>
+
+          {/* Solar Wind Speed */}
+          <div className="bg-white/5 rounded-xl p-3 sm:p-4">
+            <div className="text-xs text-gray-400 mb-1">Wind Speed</div>
+            <div className="text-xl sm:text-2xl font-bold" style={{ color: getSpeedColor(solarWind.speed) }}>
+              {solarWind.speed.toFixed(0)} km/s
+            </div>
+            <div className="flex items-center gap-1 mt-1 sm:mt-2">
+              {solarWind.speed > 500 && (
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" style={{ color: getSpeedColor(solarWind.speed) }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+              )}
+              <span className="text-xs text-gray-400">
+                {solarWind.speed > 600 ? 'Very Fast' : solarWind.speed > 500 ? 'Fast' : solarWind.speed > 400 ? 'Moderate' : 'Normal'}
+              </span>
+            </div>
+          </div>
+
+          {/* Density */}
+          <div className="bg-white/5 rounded-xl p-3 sm:p-4">
+            <div className="text-xs text-gray-400 mb-1">Density</div>
+            <div className="text-xl sm:text-2xl font-bold" style={{ color: getDensityColor(solarWind.density) }}>
+              {solarWind.density.toFixed(1)} p/cm³
+            </div>
+            <div className="text-xs text-gray-400 mt-1 sm:mt-2">
+              {solarWind.density > 50 ? 'Extreme' : solarWind.density > 20 ? 'High' : solarWind.density > 8 ? 'Enhanced' : solarWind.density > 3 ? 'Normal' : 'Low'}
+            </div>
+          </div>
+
+          {/* Row 2: Bt, Bx, By (no color codes) */}
+
+          {/* Bt - Total Field Strength */}
+          <div className="bg-white/5 rounded-xl p-3 sm:p-4">
+            <div className="text-xs text-gray-400 mb-1">Bt (Total Field)</div>
+            <div className="text-lg sm:text-xl font-bold text-gray-300">
+              {solarWind.bt.toFixed(1)} nT
+            </div>
+          </div>
+
+          {/* Bx */}
+          <div className="bg-white/5 rounded-xl p-3 sm:p-4">
+            <div className="text-xs text-gray-400 mb-1">Bx (Sun-Earth)</div>
+            <div className="text-lg sm:text-xl font-bold text-gray-300">
+              {solarWind.bx >= 0 ? '+' : ''}{solarWind.bx.toFixed(1)} nT
+            </div>
+          </div>
+
+          {/* By */}
+          <div className="bg-white/5 rounded-xl p-3 sm:p-4">
+            <div className="text-xs text-gray-400 mb-1">By (East-West)</div>
+            <div className="text-lg sm:text-xl font-bold text-gray-300">
+              {solarWind.by >= 0 ? '+' : ''}{solarWind.by.toFixed(1)} nT
+            </div>
+          </div>
+        </div>
+
+        {/* Aurora Incoming Alert */}
+        {(() => {
+          const alert = getIncomingAuroraAlert();
+          if (!alert) return null;
+
+          return (
+            <div
+              className="rounded-xl p-4 mb-6 border-2"
+              style={{ backgroundColor: `${alert.color}20`, borderColor: alert.borderColor }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center animate-pulse" style={{ backgroundColor: `${alert.color}40` }}>
+                    <svg className="w-6 h-6" style={{ color: alert.color }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-lg font-bold" style={{ color: alert.color }}>
+                      🚨 Aurora Incoming!
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-xs font-semibold" style={{ backgroundColor: alert.color, color: '#000' }}>
+                      {alert.level}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-300 mb-2">{alert.message}</p>
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-cyan-400 font-bold">
+                      Arriving at Earth in ~{alert.arrivalMins} minutes
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Energy Loading Bar */}
+        {(() => {
+          const energy = calculateEnergyLoading();
+          const barColor = energy.percentage >= 80 ? '#22c55e' : energy.percentage >= 60 ? '#84cc16' : energy.percentage >= 40 ? '#eab308' : energy.percentage >= 20 ? '#f97316' : '#6b7280';
+
+          return (
+            <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/10">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <h3 className="text-lg font-semibold text-white">Magnetosphere Energy Loading</h3>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                Energy builds up when Bz stays south. At critical levels, a substorm releases aurora.
+              </p>
+
+              {/* Progress bar */}
+              <div className="relative h-6 bg-gray-800 rounded-full overflow-hidden mb-2">
+                <div
+                  className="h-full transition-all duration-500 rounded-full"
+                  style={{
+                    width: `${energy.percentage}%`,
+                    background: `linear-gradient(to right, #6b7280, ${barColor})`
+                  }}
+                />
+                {/* Threshold markers */}
+                <div className="absolute top-0 left-[40%] w-0.5 h-full bg-white/20" />
+                <div className="absolute top-0 left-[60%] w-0.5 h-full bg-white/30" />
+                <div className="absolute top-0 left-[80%] w-0.5 h-full bg-white/40" />
+
+                {/* Percentage label */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm font-bold text-white drop-shadow-lg">{energy.percentage}%</span>
+                </div>
+              </div>
+
+              {/* Labels */}
+              <div className="flex justify-between text-xs text-gray-400 mb-3">
+                <span>Quiet</span>
+                <span>Building</span>
+                <span>High</span>
+                <span>Critical</span>
+              </div>
+
+              {/* Status */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold" style={{ color: barColor }}>{energy.status}</span>
+                {energy.timeToSubstorm && (
+                  <span className="text-sm text-gray-300">
+                    Substorm possible in ~{energy.timeToSubstorm} min
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Advance Warning Info */}
         <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6">

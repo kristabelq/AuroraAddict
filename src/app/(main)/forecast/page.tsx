@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import TimeHeader from "@/components/TimeHeader";
-import SyncedAuroraPlayers from "@/components/forecast/SyncedAuroraPlayers";
+import { TripPlannerCard } from "@/components/planning/TripPlannerCard";
 
 interface KpData {
   time_tag: string;
@@ -134,7 +134,30 @@ export default function ForecastPage() {
         }
       }
 
-      setDay27Data(dataLines);
+      // Filter to only show today and future dates
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const monthMap: { [key: string]: number } = {
+        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+      };
+
+      const filteredData = dataLines.filter((item) => {
+        const parts = item.date.split(" ");
+        if (parts.length >= 3) {
+          const year = parseInt(parts[0]);
+          const month = monthMap[parts[1]];
+          const day = parseInt(parts[2]);
+          if (month !== undefined && !isNaN(year) && !isNaN(day)) {
+            const itemDate = new Date(year, month, day);
+            return itemDate >= today;
+          }
+        }
+        return false;
+      });
+
+      setDay27Data(filteredData);
       setLoading27Day(false);
     } catch (error) {
       console.error("Error fetching 27-day data:", error);
@@ -194,14 +217,51 @@ export default function ForecastPage() {
   };
 
   const format27DayDate = (dateStr: string) => {
-    // Parse "2025 Oct 13" format
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
+    // Parse "2025 Oct 13" format manually
+    const parts = dateStr.split(" ");
+    if (parts.length >= 3) {
+      const year = parseInt(parts[0]);
+      const monthStr = parts[1];
+      const day = parseInt(parts[2]);
+
+      const monthMap: { [key: string]: number } = {
+        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+      };
+
+      const month = monthMap[monthStr];
+      if (month !== undefined && !isNaN(year) && !isNaN(day)) {
+        const date = new Date(year, month, day);
+        return date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+      }
+    }
+    return dateStr; // Fallback to original string
   };
 
+
+  // Helper function to parse "2025 Oct 13" format to Date
+  const parse27DayDateStr = (dateStr: string): Date | null => {
+    const parts = dateStr.split(" ");
+    if (parts.length >= 3) {
+      const year = parseInt(parts[0]);
+      const monthStr = parts[1];
+      const day = parseInt(parts[2]);
+
+      const monthMap: { [key: string]: number } = {
+        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+      };
+
+      const month = monthMap[monthStr];
+      if (month !== undefined && !isNaN(year) && !isNaN(day)) {
+        return new Date(year, month, day);
+      }
+    }
+    return null;
+  };
 
   // Merge observed KP data with forecast data
   const getMerged27DayData = () => {
@@ -213,6 +273,7 @@ export default function ForecastPage() {
     const observedDailyMax = new Map<string, number>();
     observedKpData.forEach((reading) => {
       const date = new Date(reading.time_tag);
+      if (isNaN(date.getTime())) return; // Skip invalid dates
       const dateKey = date.toISOString().split("T")[0];
       const kpValue = parseFloat(reading.kp);
 
@@ -223,11 +284,18 @@ export default function ForecastPage() {
 
     // Create merged data array
     const merged: Day27Data[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     day27Data.forEach((forecastDay) => {
-      const forecastDate = new Date(forecastDay.date);
+      const forecastDate = parse27DayDateStr(forecastDay.date);
+      if (!forecastDate) {
+        // If parsing fails, just use the forecast data as-is
+        merged.push({
+          ...forecastDay,
+          isObserved: false,
+        });
+        return;
+      }
+
       forecastDate.setHours(0, 0, 0, 0);
       const dateKey = forecastDate.toISOString().split("T")[0];
 
@@ -289,27 +357,6 @@ export default function ForecastPage() {
             KP index data from NOAA Space Weather Prediction Center
           </p>
         </div>
-
-        {/* Current KP */}
-        <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 mb-6 text-center">
-          <div className="text-gray-400 mb-2">Current KP Index</div>
-          <div
-            className="text-6xl font-bold mb-2"
-            style={{ color: getKpColor(parseFloat(currentKp)) }}
-          >
-            {currentKp}
-          </div>
-          <div className="text-sm text-gray-400">
-            {parseFloat(currentKp) >= 5
-              ? "High Activity - Great viewing conditions!"
-              : parseFloat(currentKp) >= 3
-              ? "Moderate Activity - Possible aurora"
-              : "Low Activity - Limited visibility"}
-          </div>
-        </div>
-
-        {/* Aurora Forecast Animations - Synchronized */}
-        <SyncedAuroraPlayers />
 
         {/* Info Box */}
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6">
@@ -390,48 +437,8 @@ export default function ForecastPage() {
           </div>
         </div>
 
-        {/* KP Index - Long term forecast */}
-        <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 mb-6">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            KP Index - Long term forecast
-          </h2>
-          <div className="relative h-64">
-            {/* Y-axis labels */}
-            <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-gray-400 text-sm pr-2">
-              <span>8.00</span>
-              <span>6.00</span>
-              <span>4.00</span>
-              <span>2.00</span>
-              <span>0.00</span>
-            </div>
-
-            {/* Chart */}
-            <div className="ml-12 h-full flex items-end justify-around gap-2">
-              {longTermForecast.map((data, index) => {
-                const kpValue = parseFloat(data.kp);
-                return (
-                  <div key={index} className="flex-1 flex flex-col items-center">
-                    <div className="relative w-full">
-                      <div className="text-white text-xs mb-1 text-center">
-                        {kpValue.toFixed(2)}
-                      </div>
-                      <div
-                        className="w-full rounded-t"
-                        style={{
-                          height: `${getBarHeight(kpValue)}px`,
-                          backgroundColor: getKpColor(kpValue),
-                        }}
-                      />
-                    </div>
-                    <div className="text-xs text-gray-400 mt-2 text-center">
-                      {formatDate(data.time_tag)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        {/* 3-Day Trip Planner with CME/HSS Alerts */}
+        <TripPlannerCard className="mb-6" />
 
         {/* 27-Day KP Forecast */}
         <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6">
@@ -491,6 +498,27 @@ export default function ForecastPage() {
                 })}
               </div>
 
+              {/* Refresh date notice */}
+              {(() => {
+                const today = new Date();
+                const daysUntilMonday = (8 - today.getDay()) % 7 || 7; // Next Monday
+                const nextRefresh = new Date(today);
+                nextRefresh.setDate(today.getDate() + daysUntilMonday);
+                const daysShowing = getMerged27DayData().length;
+
+                return (
+                  <div className="bg-gray-800/50 rounded-lg p-3 flex items-center justify-between text-sm mb-4">
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <span>📅</span>
+                      <span>Showing <span className="text-white font-medium">{daysShowing} days</span> of forecast</span>
+                    </div>
+                    <div className="text-gray-400">
+                      Next refresh: <span className="text-blue-400 font-medium">{nextRefresh.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Info about 27-day forecast */}
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
                 <div className="flex gap-3">
@@ -512,10 +540,9 @@ export default function ForecastPage() {
                       About the 27-Day Forecast:
                     </p>
                     <p className="mb-2">
-                      This extended forecast shows the maximum daily KP index for
-                      the next 27 days. Bars with full opacity show real-time
-                      observed data from NOAA, while transparent bars show
-                      predicted values. The forecast is updated weekly.
+                      This extended forecast shows the maximum daily KP index.
+                      NOAA publishes a new 27-day forecast every Monday, so fewer
+                      days may show as the week progresses.
                     </p>
                     <p>
                       Higher KP values indicate better chances of aurora activity.

@@ -18,71 +18,20 @@ interface AuroraCamera {
 }
 
 // Curated list of free, publicly accessible aurora cameras
+// Note: Camera URLs may change - these are verified working as of Jan 2026
 const AURORA_CAMERAS: AuroraCamera[] = [
   {
     id: "yellowknife-canada",
-    name: "Yellowknife Aurora Cam",
+    name: "Yellowknife AuroraMAX",
     location: "Yellowknife, Northwest Territories",
     country: "Canada",
     latitude: 62.4540,
     longitude: -114.3718,
-    imageUrl: "https://auroramax.com/images/latest-images/latest_1024_n.jpg",
-    updateFrequency: "Every 6 seconds",
-    provider: "AuroraMAX",
-    timezone: "MST",
-    useProxy: false
-  },
-  {
-    id: "poker-flat-alaska",
-    name: "Poker Flat All-Sky Camera",
-    location: "Fairbanks, Alaska",
-    country: "USA",
-    latitude: 65.1264,
-    longitude: -147.4769,
-    imageUrl: "https://www.gi.alaska.edu/monitors/poker-flat/images/DASC_PSFC_20120101_000000_0000_all.jpg",
+    imageUrl: "https://www.asc-csa.gc.ca/images/astronomie/aurores/auroramax-background.jpg",
     updateFrequency: "Every minute",
-    provider: "University of Alaska Geophysical Institute",
-    timezone: "AKST",
-    useProxy: false
-  },
-  {
-    id: "skibotn-norway",
-    name: "Skibotn Aurora Observatory",
-    location: "Skibotn, Troms",
-    country: "Norway",
-    latitude: 69.3486,
-    longitude: 20.3639,
-    imageUrl: "https://site.uit.no/spaceweather/files/2024/01/current.jpg",
-    updateFrequency: "Every 10 minutes",
-    provider: "UiT The Arctic University of Norway",
-    timezone: "CET",
-    useProxy: false
-  },
-  {
-    id: "abisko-sweden",
-    name: "Abisko Aurora Sky Station",
-    location: "Abisko, Lapland",
-    country: "Sweden",
-    latitude: 68.35,
-    longitude: 18.83,
-    imageUrl: "https://www.aurora-service.eu/aurora-school/webcam_03.jpg",
-    updateFrequency: "Every 5 minutes",
-    provider: "Lights Over Lapland",
-    timezone: "CET",
-    useProxy: false
-  },
-  {
-    id: "churchill-canada",
-    name: "Churchill Aurora Cam",
-    location: "Churchill, Manitoba",
-    country: "Canada",
-    latitude: 58.7684,
-    longitude: -94.1648,
-    imageUrl: "https://explore.org/cams/player/northern-lights-cam/asset/66f0e3b2d0c95503db90f8e7",
-    updateFrequency: "Live stream",
-    provider: "Explore.org",
-    timezone: "CST",
-    useProxy: false
+    provider: "Canadian Space Agency",
+    timezone: "MST",
+    useProxy: true
   },
   {
     id: "sodankyla-finland",
@@ -91,11 +40,63 @@ const AURORA_CAMERAS: AuroraCamera[] = [
     country: "Finland",
     latitude: 67.3671,
     longitude: 26.6290,
-    imageUrl: "https://www.sgo.fi/pub/Asky_cameras/Sodankyla/latest.jpg",
+    imageUrl: "https://www.sgo.fi/Data/RealTime/Kuvat/UCL_SK.jpg",
     updateFrequency: "Every minute",
     provider: "Sodankylä Geophysical Observatory",
     timezone: "EET",
-    useProxy: false
+    useProxy: true
+  },
+  {
+    id: "kilpisjarvi-finland",
+    name: "Kilpisjärvi All-Sky Camera",
+    location: "Kilpisjärvi, Lapland",
+    country: "Finland",
+    latitude: 69.0500,
+    longitude: 20.7900,
+    imageUrl: "https://www.sgo.fi/Data/RealTime/Kuvat/UCL_KIL.jpg",
+    updateFrequency: "Every minute",
+    provider: "Sodankylä Geophysical Observatory",
+    timezone: "EET",
+    useProxy: true
+  },
+  {
+    id: "muonio-finland",
+    name: "Muonio All-Sky Camera",
+    location: "Muonio, Lapland",
+    country: "Finland",
+    latitude: 67.9390,
+    longitude: 23.6870,
+    imageUrl: "https://www.sgo.fi/Data/RealTime/Kuvat/UCL_MUO.jpg",
+    updateFrequency: "Every minute",
+    provider: "Sodankylä Geophysical Observatory",
+    timezone: "EET",
+    useProxy: true
+  },
+  {
+    id: "kevo-finland",
+    name: "Kevo All-Sky Camera",
+    location: "Kevo, Lapland",
+    country: "Finland",
+    latitude: 69.7550,
+    longitude: 27.0070,
+    imageUrl: "https://www.sgo.fi/Data/RealTime/Kuvat/UCL_KEV.jpg",
+    updateFrequency: "Every minute",
+    provider: "Sodankylä Geophysical Observatory",
+    timezone: "EET",
+    useProxy: true
+  },
+  {
+    id: "abisko-sweden",
+    name: "Abisko All-Sky Camera",
+    location: "Abisko, Lapland",
+    country: "Sweden",
+    latitude: 68.35,
+    longitude: 18.83,
+    imageUrl: "https://www.sgo.fi/Data/RealTime/Kuvat/UCL_ABK.jpg",
+    updateFrequency: "Every minute",
+    provider: "Sodankylä Geophysical Observatory",
+    timezone: "CET",
+    useProxy: true
   },
   {
     id: "kiruna-sweden",
@@ -104,11 +105,11 @@ const AURORA_CAMERAS: AuroraCamera[] = [
     country: "Sweden",
     latitude: 67.8558,
     longitude: 20.2253,
-    imageUrl: "https://www2.irf.se/Observatory/All-sky/Kiruna/movie/latest.jpg",
+    imageUrl: "https://www.irf.se/allsky/rtg/latest.jpeg",
     updateFrequency: "Every minute",
     provider: "Swedish Institute of Space Physics",
     timezone: "CET",
-    useProxy: false
+    useProxy: true
   },
   {
     id: "longyearbyen-svalbard",
@@ -121,20 +122,20 @@ const AURORA_CAMERAS: AuroraCamera[] = [
     updateFrequency: "Every 2 minutes",
     provider: "UNIS Kjell Henriksen Observatory",
     timezone: "CET",
-    useProxy: false
+    useProxy: true
   },
   {
-    id: "tromso-norway",
-    name: "Tromsø All-Sky Camera",
-    location: "Tromsø, Troms",
+    id: "andoya-norway",
+    name: "Andøya All-Sky Camera",
+    location: "Andøya, Nordland",
     country: "Norway",
-    latitude: 69.6492,
-    longitude: 18.9553,
-    imageUrl: "https://site.uit.no/spaceweather/files/2024/01/current_tromso.jpg",
-    updateFrequency: "Every 10 minutes",
-    provider: "UiT Space Physics",
+    latitude: 69.2940,
+    longitude: 16.0300,
+    imageUrl: "https://www.sgo.fi/Data/RealTime/Kuvat/UCL_AND.jpg",
+    updateFrequency: "Every minute",
+    provider: "Sodankylä Geophysical Observatory",
     timezone: "CET",
-    useProxy: false
+    useProxy: true
   }
 ];
 
@@ -319,8 +320,8 @@ export default function CamerasPage() {
             summer months when there isn't sufficient darkness for aurora viewing (May-August in the Arctic).
           </p>
           <p>
-            <strong className="text-white">Current Season:</strong> October is excellent for aurora viewing
-            as the nights are getting longer in the Arctic regions!
+            <strong className="text-white">Current Season:</strong> January is peak aurora season
+            with long polar nights in the Arctic regions!
           </p>
         </div>
       </div>

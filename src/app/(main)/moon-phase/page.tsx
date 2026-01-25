@@ -1,6 +1,5 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import TimeHeader from "@/components/TimeHeader";
@@ -12,24 +11,10 @@ interface MoonPhaseData {
 }
 
 export default function MoonPhasePage() {
-  const { data: session, status } = useSession();
   const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [monthDays, setMonthDays] = useState<Date[]>([]);
   const [moonPhases, setMoonPhases] = useState<Map<string, MoonPhaseData>>(new Map());
-
-  useEffect(() => {
-    if (status === "loading") return;
-
-    if (status === "unauthenticated") {
-      router.push("/auth/signin");
-      return;
-    }
-
-    if (session?.user && !session.user.onboardingComplete) {
-      router.push("/onboarding");
-    }
-  }, [session, status, router]);
 
   useEffect(() => {
     generateCalendarDays();
@@ -160,14 +145,6 @@ export default function MoonPhasePage() {
   const isCurrentMonth = (date: Date) => {
     return date.getMonth() === currentMonth.getMonth();
   };
-
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#0a0e17] pb-24">

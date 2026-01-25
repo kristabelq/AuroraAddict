@@ -52,16 +52,23 @@ export default function BusinessUpgradePage() {
       const response = await fetch("/api/user/profile");
       const data = await response.json();
 
-      // Redirect if already verified or pending
-      if (data.verificationStatus === "verified") {
-        toast.success("You're already verified!");
+      // Account type conversion is no longer allowed
+      // Redirect all users back to profile with appropriate message
+      if (data.userType === "personal") {
+        toast.error("Account type conversion is not available. Please create a new account for business use.");
         router.push("/profile/edit");
         return;
       }
 
-      if (data.verificationStatus === "pending") {
-        toast("Your verification is pending review");
-        router.push("/profile/edit");
+      // If they're already a business account, redirect to verification page
+      if (data.userType === "business") {
+        if (data.verificationStatus === "verified") {
+          toast.success("You're already verified!");
+          router.push("/profile/edit");
+          return;
+        }
+        // Redirect to business verification page
+        router.push("/business/verification");
         return;
       }
 

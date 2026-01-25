@@ -5,8 +5,20 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import TimeHeader from "@/components/TimeHeader";
+import SyncedAuroraPlayers from "@/components/forecast/SyncedAuroraPlayers";
 import { auroraLocations, calculateDistance } from "@/lib/auroraLocations";
 import { calculateAuroraVerdict, getVerdictColor, type AuroraVerdict } from "@/lib/auroraVerdictSystem";
+import { calculateLocationAlert, type LocationAlert, type AlertLevel } from "@/lib/alerts/locationAlerts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
+
+interface FlareChartDataPoint {
+  timestamp: number;
+  time: string;
+  flux: number;
+  class: string;
+  intensity: number;
+  isMajor: boolean;
+}
 
 const AuroraMap = dynamic(() => import("@/components/map/AuroraMap"), {
   ssr: false,
@@ -29,7 +41,7 @@ export default function IntelligencePage() {
   const [showSightings, setShowSightings] = useState(true);
   const [showTwilightZones, setShowTwilightZones] = useState(false);
 
-  // Cosmic Intel states
+  // Aurora Forecast states
   const [currentKp, setCurrentKp] = useState<string>("0.00");
   const [loadingKp, setLoadingKp] = useState(true);
   const [moonPhase, setMoonPhase] = useState<{
@@ -58,6 +70,8 @@ export default function IntelligencePage() {
     detectedAt: string;
     arrivalDate: string;
     expectedKp: string;
+    longitude: number;
+    halfAngle: number;
   }>>([]);
   const [hssPrediction, setHssPrediction] = useState<{
     dateRange: string;
@@ -72,6 +86,7 @@ export default function IntelligencePage() {
     time: string;
   } | null>(null);
   const [loadingFlare, setLoadingFlare] = useState(true);
+  const [flareChartData, setFlareChartData] = useState<FlareChartDataPoint[]>([]);
   const [coronalHole, setCoronalHole] = useState<{
     isActive: boolean;
     size: string;
@@ -202,6 +217,10 @@ export default function IntelligencePage() {
   const cloudIntelSuggestionsRef = useRef<HTMLDivElement>(null);
   const cloudIntelDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Location-based alert state
+  const [locationAlert, setLocationAlert] = useState<LocationAlert | null>(null);
+  const [userLocationName, setUserLocationName] = useState<string>("");
+
   // Celestial events state
   const [nextCelestialEvent, setNextCelestialEvent] = useState<{
     name: string;
@@ -297,12 +316,12 @@ export default function IntelligencePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Auto-detect location for Cloud Intel tab
+  // Auto-detect location on initial site load (runs once)
   useEffect(() => {
-    if (activeTab === "cloud" && !hasAutoDetected && !cloudIntelData && !loadingCloudIntel) {
+    if (!hasAutoDetected && !cloudIntelCoords) {
       autoDetectCloudIntelLocation();
     }
-  }, [activeTab, hasAutoDetected, cloudIntelData, loadingCloudIntel]);
+  }, []);
 
   // Auto-detect "Your Location" (Gate 2) for AIvisor tab
   useEffect(() => {
@@ -311,6 +330,33 @@ export default function IntelligencePage() {
       handleGetHuntLocationGPS();
     }
   }, [activeTab, hasAutoDetectedHuntLocation, huntLocationCoords, gettingGPSLocation]);
+
+  // Calculate location-based alert when conditions change
+  useEffect(() => {
+    if (!cloudIntelCoords) return;
+
+    const kp = parseFloat(currentKp) || 0;
+    const bz = currentBz ?? 0;
+    const speed = solarWindSpeed ?? 400;
+
+    // Check if it's currently dark (simple check based on time)
+    const hour = new Date().getHours();
+    const isDark = hour >= 20 || hour <= 5;
+
+    // Calculate the location alert
+    const alert = calculateLocationAlert({
+      latitude: cloudIntelCoords.lat,
+      longitude: cloudIntelCoords.lon,
+      currentKp: kp,
+      currentBz: bz,
+      solarWindSpeed: speed,
+      isDark,
+      moonPhase: moonPhase?.illumination ? moonPhase.illumination / 100 : undefined,
+      cloudCover: cloudIntelData?.current?.cloud_cover,
+    });
+
+    setLocationAlert(alert);
+  }, [cloudIntelCoords, currentKp, currentBz, solarWindSpeed, moonPhase, cloudIntelData]);
 
   // Estimate light pollution based on location type
   const estimateLightPollution = (addressData: any) => {
@@ -430,7 +476,7 @@ export default function IntelligencePage() {
         console.error("Geolocation error:", error);
         setAutoDetectingLocation(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
@@ -705,12 +751,34 @@ export default function IntelligencePage() {
 
       // Find the most recent Earth-directed CME
       if (data && data.length > 0) {
-        // Filter for Earth-directed CMEs
+        // Helper function to check if CME is Earth-directed
+        const isEarthDirected = (
+          latitude?: number,
+          longitude?: number,
+          type?: string,
+          enlilList?: any[]
+        ): boolean => {
+          // Full halo CMEs are always Earth-directed
+          if (type?.toLowerCase().includes("s")) return true;
+          // If ENLIL model predicts Earth impact, it's Earth-directed
+          if (enlilList && enlilList.length > 0) return true;
+          // Check if within ±30° cone (latitude AND longitude)
+          if (latitude !== undefined && longitude !== undefined) {
+            return Math.abs(latitude) <= 30 && Math.abs(longitude) <= 30;
+          }
+          return false;
+        };
+
+        // Filter for Earth-directed CMEs only
         const earthDirectedCmes = data.filter((cme: any) => {
           if (cme.cmeAnalyses && cme.cmeAnalyses.length > 0) {
-            const latestAnalysis = cme.cmeAnalyses[cme.cmeAnalyses.length - 1];
-            return latestAnalysis.isMostAccurate &&
-                   (latestAnalysis.latitude === 0 || latestAnalysis.enlilList?.length > 0);
+            const latestAnalysis = cme.cmeAnalyses.find((a: any) => a.isMostAccurate) || cme.cmeAnalyses[cme.cmeAnalyses.length - 1];
+            return isEarthDirected(
+              latestAnalysis.latitude,
+              latestAnalysis.longitude,
+              latestAnalysis.type,
+              latestAnalysis.enlilList
+            );
           }
           return false;
         });
@@ -722,6 +790,8 @@ export default function IntelligencePage() {
           detectedAt: string;
           arrivalDate: string;
           expectedKp: string;
+          longitude: number;
+          halfAngle: number;
         }> = [];
 
         const now = new Date();
@@ -759,7 +829,9 @@ export default function IntelligencePage() {
               speed: Math.round(speed),
               detectedAt: detectionTime.toISOString(),
               arrivalDate: `${arrivalTime.getDate()} ${arrivalTime.toLocaleDateString('en-US', { month: 'short' })} ${arrivalTime.getFullYear()}`,
-              expectedKp
+              expectedKp,
+              longitude: analysis.longitude ?? 0,
+              halfAngle: halfAngle,
             });
           }
         }
@@ -959,12 +1031,67 @@ export default function IntelligencePage() {
           intensity: parseFloat(intensity.toFixed(1)),
           time: latestReading.time_tag,
         });
+
+        // Build chart data from last 3 days
+        const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
+        const chartPoints: FlareChartDataPoint[] = [];
+
+        // Sample every 10th point for performance (data has 1-minute intervals)
+        for (let i = 0; i < data.length; i += 10) {
+          const reading = data[i];
+          const readingFlux = parseFloat(reading.flux);
+          const timestamp = new Date(reading.time_tag).getTime();
+
+          if (timestamp >= threeDaysAgo) {
+            let pointClass = "A";
+            let pointIntensity = 0;
+
+            if (readingFlux >= 1e-4) {
+              pointClass = "X";
+              pointIntensity = readingFlux / 1e-4;
+            } else if (readingFlux >= 1e-5) {
+              pointClass = "M";
+              pointIntensity = readingFlux / 1e-5;
+            } else if (readingFlux >= 1e-6) {
+              pointClass = "C";
+              pointIntensity = readingFlux / 1e-6;
+            } else if (readingFlux >= 1e-7) {
+              pointClass = "B";
+              pointIntensity = readingFlux / 1e-7;
+            } else {
+              pointClass = "A";
+              pointIntensity = readingFlux / 1e-8;
+            }
+
+            chartPoints.push({
+              timestamp,
+              time: reading.time_tag,
+              flux: readingFlux,
+              class: pointClass,
+              intensity: pointIntensity,
+              isMajor: pointClass === 'M' || pointClass === 'X'
+            });
+          }
+        }
+
+        setFlareChartData(chartPoints);
       }
       setLoadingFlare(false);
     } catch (error) {
       console.error("Error fetching solar flare data:", error);
       setLoadingFlare(false);
     }
+  };
+
+  // Helper function for flare chart x-axis
+  const formatFlareXAxisTime = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    return `${diffDays} days ago`;
   };
 
   const fetchCoronalHoleData = async () => {
@@ -1400,6 +1527,37 @@ export default function IntelligencePage() {
     return "Poor";
   };
 
+  // Generate explanation for why conditions aren't favorable despite some good readings
+  const getUnfavorableExplanation = (kp: number, bz: number, speed: number, density: number): string | null => {
+    const issues: string[] = [];
+
+    // Check each parameter and identify the limiting factors
+    if (density < 3) {
+      issues.push(`Density is very low (${density.toFixed(1)} p/cm³) - need 5+ for visible aurora`);
+    } else if (density < 5) {
+      issues.push(`Density is low (${density.toFixed(1)} p/cm³) - ideally need 5+ p/cm³`);
+    }
+
+    if (bz > 0) {
+      issues.push(`Bz is northward (+${bz.toFixed(1)} nT) - need southward (negative) Bz`);
+    } else if (bz > -5) {
+      issues.push(`Bz is only weakly southward (${bz.toFixed(1)} nT) - stronger southward (-10 or more) is better`);
+    }
+
+    if (speed < 400) {
+      issues.push(`Solar wind speed is slow (${speed.toFixed(0)} km/s) - need 450+ km/s`);
+    }
+
+    if (kp < 3) {
+      issues.push(`Kp index is low (${kp.toFixed(1)}) - geomagnetic activity is quiet`);
+    }
+
+    if (issues.length === 0) return null;
+
+    // Return the most critical issue (first one)
+    return issues[0];
+  };
+
   const getHemispherePowerColor = (gw: number) => {
     // Traffic light: Green = strong aurora, Yellow = moderate, Red = weak
     if (gw >= 50) return "#22c55e"; // Green (strong aurora activity)
@@ -1522,11 +1680,53 @@ export default function IntelligencePage() {
 
     setLoadingYourLocationSuggestions(true);
     try {
-      const response = await fetch(
+      // Check if query looks like a postal code (numbers, possibly with letters/spaces)
+      const isPostalCode = /^[0-9]{2,}/.test(query.trim()) || /^[A-Z]{1,2}[0-9]/i.test(query.trim());
+
+      let results: any[] = [];
+
+      // Try Open-Meteo first for city/place names
+      const openMeteoResponse = await fetch(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=en&format=json`
       );
-      const data = await response.json();
-      setYourLocationSuggestions(data.results || []);
+      const openMeteoData = await openMeteoResponse.json();
+      results = openMeteoData.results || [];
+
+      // If no results or looks like postal code, try Nominatim
+      if (results.length === 0 || isPostalCode) {
+        const nominatimResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5`
+        );
+        const nominatimData = await nominatimResponse.json();
+
+        // Convert Nominatim results to match Open-Meteo format
+        const nominatimResults = nominatimData.map((item: any) => ({
+          name: item.address?.city || item.address?.town || item.address?.village || item.address?.municipality || item.name || query,
+          country: item.address?.country || "",
+          admin1: item.address?.state || item.address?.county || "",
+          latitude: parseFloat(item.lat),
+          longitude: parseFloat(item.lon),
+          postalCode: item.address?.postcode || null
+        }));
+
+        // Combine results, prioritizing Nominatim for postal codes
+        if (isPostalCode) {
+          results = [...nominatimResults, ...results];
+        } else {
+          results = [...results, ...nominatimResults];
+        }
+
+        // Remove duplicates based on coordinates
+        const seen = new Set();
+        results = results.filter((item: any) => {
+          const key = `${item.latitude?.toFixed(2)},${item.longitude?.toFixed(2)}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
+      setYourLocationSuggestions(results.slice(0, 10));
       setShowYourLocationSuggestions(true);
       setYourLocationSelectedIndex(-1);
     } catch (error) {
@@ -2319,11 +2519,54 @@ export default function IntelligencePage() {
 
     setLoadingCloudIntelSuggestions(true);
     try {
-      const response = await fetch(
+      // Check if query looks like a postal code (numbers, possibly with letters/spaces)
+      const isPostalCode = /^[0-9]{2,}/.test(query.trim()) || /^[A-Z]{1,2}[0-9]/i.test(query.trim());
+
+      let results: any[] = [];
+
+      // Try Open-Meteo first for city/place names
+      const openMeteoResponse = await fetch(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=en&format=json`
       );
-      const data = await response.json();
-      setCloudIntelSuggestions(data.results || []);
+      const openMeteoData = await openMeteoResponse.json();
+      results = openMeteoData.results || [];
+
+      // If no results or looks like postal code, try Nominatim
+      if (results.length === 0 || isPostalCode) {
+        const nominatimResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5`
+        );
+        const nominatimData = await nominatimResponse.json();
+
+        // Convert Nominatim results to match Open-Meteo format
+        const nominatimResults = nominatimData.map((item: any) => ({
+          name: item.address?.city || item.address?.town || item.address?.village || item.address?.municipality || item.name || query,
+          country: item.address?.country || "",
+          admin1: item.address?.state || item.address?.county || "",
+          latitude: parseFloat(item.lat),
+          longitude: parseFloat(item.lon),
+          // Mark as from Nominatim for display
+          postalCode: item.address?.postcode || null
+        }));
+
+        // Combine results, prioritizing Nominatim for postal codes
+        if (isPostalCode) {
+          results = [...nominatimResults, ...results];
+        } else {
+          results = [...results, ...nominatimResults];
+        }
+
+        // Remove duplicates based on coordinates
+        const seen = new Set();
+        results = results.filter((item: any) => {
+          const key = `${item.latitude?.toFixed(2)},${item.longitude?.toFixed(2)}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
+      setCloudIntelSuggestions(results.slice(0, 10));
       setShowCloudIntelSuggestions(true);
       setCloudIntelSelectedIndex(-1);
     } catch (error) {
@@ -2604,34 +2847,34 @@ export default function IntelligencePage() {
         <div className="max-w-screen-lg mx-auto p-4">
           <div className="space-y-4">
             {/* Title */}
-            <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-3xl font-bold text-white">⛅ Visibility Intel</h2>
+            <div className="flex items-center gap-2 sm:gap-3 mb-2">
+              <h2 className="text-2xl sm:text-3xl font-bold text-white">⛅ Visibility Intel</h2>
             </div>
 
             {/* Sky Cards Grid */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
               {/* Moon Phase Card */}
               <div
                 onClick={() => router.push("/moon-phase")}
-                className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-2xl p-4 cursor-pointer hover:scale-[1.02] transition-transform"
+                className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-lg rounded-xl sm:rounded-2xl p-3 sm:p-4 cursor-pointer hover:scale-[1.02] transition-transform"
               >
-                <div className="flex items-center gap-4">
-                  <div className="flex flex-col items-center">
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <div className="flex flex-col items-center flex-shrink-0">
                     {loadingMoon ? (
-                      <div className="text-5xl animate-pulse">🌙</div>
+                      <div className="text-3xl sm:text-5xl animate-pulse">🌙</div>
                     ) : moonPhase ? (
-                      <div className="text-5xl">
+                      <div className="text-3xl sm:text-5xl">
                         {getMoonPhaseEmoji(moonPhase.phase)}
                       </div>
                     ) : null}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-gray-400 text-xs mb-1">Moon Phase</div>
+                    <div className="text-gray-400 text-xs mb-0.5 sm:mb-1">Moon Phase</div>
                     {loadingMoon ? (
-                      <div className="text-lg font-bold text-gray-400">...</div>
+                      <div className="text-sm sm:text-lg font-bold text-gray-400">...</div>
                     ) : moonPhase ? (
                       <>
-                        <div className="text-lg font-bold text-white truncate">
+                        <div className="text-sm sm:text-lg font-bold text-white truncate">
                           {moonPhase.phase}
                         </div>
                         <div className="text-xs text-gray-400">
@@ -2640,7 +2883,7 @@ export default function IntelligencePage() {
                       </>
                     ) : null}
                   </div>
-                  <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -2649,17 +2892,17 @@ export default function IntelligencePage() {
               {/* Celestial Events Card */}
               <div
                 onClick={() => router.push("/celestial-events")}
-                className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 backdrop-blur-lg rounded-2xl p-4 cursor-pointer hover:scale-[1.02] transition-transform"
+                className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 backdrop-blur-lg rounded-xl sm:rounded-2xl p-3 sm:p-4 cursor-pointer hover:scale-[1.02] transition-transform"
               >
-                <div className="flex items-center gap-4">
-                  <div className="flex flex-col items-center">
-                    <div className="text-5xl">☄️</div>
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div className="text-3xl sm:text-5xl">☄️</div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-gray-400 text-xs mb-1">Next Event</div>
+                    <div className="text-gray-400 text-xs mb-0.5 sm:mb-1">Next Event</div>
                     {nextCelestialEvent ? (
                       <>
-                        <div className="text-lg font-bold text-white truncate">
+                        <div className="text-sm sm:text-lg font-bold text-white truncate">
                           {nextCelestialEvent.name}
                         </div>
                         <div className="text-xs text-gray-400">
@@ -2671,10 +2914,10 @@ export default function IntelligencePage() {
                         </div>
                       </>
                     ) : (
-                      <div className="text-lg font-bold text-gray-400">Loading...</div>
+                      <div className="text-sm sm:text-lg font-bold text-gray-400">Loading...</div>
                     )}
                   </div>
-                  <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -2683,11 +2926,11 @@ export default function IntelligencePage() {
 
             {/* Time of Day & Sunrise/Sunset Cards */}
             {twilightData && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4">
                 {/* Time of Day Card */}
-                <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 backdrop-blur-lg rounded-2xl p-4 border border-white/10">
-                  <div className="flex items-center gap-3">
-                    <div className="text-4xl">
+                <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 backdrop-blur-lg rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/10">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="text-3xl sm:text-4xl flex-shrink-0">
                       {twilightData.currentPeriod === 'night' && '🌙'}
                       {twilightData.currentPeriod === 'astronomical' && '🌌'}
                       {twilightData.currentPeriod === 'nautical' && '🌊'}
@@ -2695,15 +2938,15 @@ export default function IntelligencePage() {
                       {twilightData.currentPeriod === 'daylight' && '☀️'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-gray-400 text-xs mb-1">Time of Day</div>
-                      <div className="text-lg font-bold text-white capitalize">
-                        {twilightData.currentPeriod === 'astronomical' && 'Astronomical Twilight'}
-                        {twilightData.currentPeriod === 'nautical' && 'Nautical Twilight'}
+                      <div className="text-gray-400 text-xs mb-0.5 sm:mb-1">Time of Day</div>
+                      <div className="text-sm sm:text-lg font-bold text-white capitalize">
+                        {twilightData.currentPeriod === 'astronomical' && 'Astro Twilight'}
+                        {twilightData.currentPeriod === 'nautical' && 'Nautical Twi'}
                         {twilightData.currentPeriod === 'civil' && 'Civil Twilight'}
                         {twilightData.currentPeriod === 'daylight' && 'Daylight'}
                         {twilightData.currentPeriod === 'night' && 'Night'}
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-gray-400 hidden sm:block">
                         {twilightData.currentPeriod === 'night' && 'Deep darkness - best for aurora'}
                         {twilightData.currentPeriod === 'astronomical' && 'Sky is dark enough for faint stars'}
                         {twilightData.currentPeriod === 'nautical' && 'Horizon barely visible'}
@@ -2784,7 +3027,7 @@ export default function IntelligencePage() {
                     onFocus={() => {
                       if (cloudIntelSuggestions.length > 0) setShowCloudIntelSuggestions(true);
                     }}
-                    placeholder="e.g., Oslo, Norway"
+                    placeholder="City, country or postal code"
                     className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     autoComplete="off"
                   />
@@ -3321,53 +3564,53 @@ export default function IntelligencePage() {
         </div>
       )}
 
-      {/* Cosmic Intel Tab */}
+      {/* Aurora Forecast Tab */}
       {activeTab === "cosmic" && (
         <div className="max-w-screen-lg mx-auto p-4">
           <div className="space-y-4">
             {/* Aurora Forecast Title */}
-            <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-3xl font-bold text-white">🔆 Aurora Forecast</h2>
+            <div className="flex items-center gap-2 sm:gap-3 mb-2">
+              <h2 className="text-2xl sm:text-3xl font-bold text-white">🔆 Aurora Forecast</h2>
             </div>
 
             {/* Navigation Cards - 3 Column Grid */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {/* CME Alerts Card */}
               <button
                 onClick={() => router.push("/cme-alerts")}
-                className="bg-gradient-to-br from-orange-900/40 to-red-900/40 rounded-xl p-4 border border-orange-500/30 hover:scale-[1.02] hover:border-orange-400/50 transition-all"
+                className="bg-gradient-to-br from-orange-900/40 to-red-900/40 rounded-xl p-3 sm:p-4 border border-orange-500/30 hover:scale-[1.02] hover:border-orange-400/50 transition-all"
               >
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <span className="text-5xl">☄️</span>
-                  <h3 className="text-sm font-bold text-white">CME Alerts</h3>
+                <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                  <span className="text-4xl sm:text-5xl">☄️</span>
+                  <h3 className="text-xs sm:text-sm font-bold text-white">CME Alerts</h3>
                 </div>
               </button>
 
               {/* Solar Flare Card */}
               <button
                 onClick={() => router.push("/solar-flares")}
-                className="bg-gradient-to-br from-yellow-900/40 to-orange-900/40 rounded-xl p-4 border border-yellow-500/30 hover:scale-[1.02] hover:border-yellow-400/50 transition-all"
+                className="bg-gradient-to-br from-yellow-900/40 to-orange-900/40 rounded-xl p-3 sm:p-4 border border-yellow-500/30 hover:scale-[1.02] hover:border-yellow-400/50 transition-all"
               >
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <span className="text-5xl">⚡</span>
-                  <h3 className="text-sm font-bold text-white">Solar Flare</h3>
+                <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                  <span className="text-4xl sm:text-5xl">⚡</span>
+                  <h3 className="text-xs sm:text-sm font-bold text-white">Solar Flare</h3>
                 </div>
               </button>
 
               {/* Coronal Holes Card */}
               <button
                 onClick={() => router.push("/coronal-holes")}
-                className="bg-gradient-to-br from-purple-900/40 to-indigo-900/40 rounded-xl p-4 border border-purple-500/30 hover:scale-[1.02] hover:border-purple-400/50 transition-all"
+                className="bg-gradient-to-br from-purple-900/40 to-indigo-900/40 rounded-xl p-3 sm:p-4 border border-purple-500/30 hover:scale-[1.02] hover:border-purple-400/50 transition-all"
               >
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <span className="text-5xl">🕳️</span>
-                  <h3 className="text-sm font-bold text-white">Coronal Holes</h3>
+                <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                  <span className="text-4xl sm:text-5xl">🕳️</span>
+                  <h3 className="text-xs sm:text-sm font-bold text-white">Coronal Holes</h3>
                 </div>
               </button>
             </div>
 
             {/* Real-time Solar Data Cards - 3 Column Grid */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {/* CME Alert Card - Shows CMEs with speed >= 400 */}
               {(() => {
                 // Find CMEs with speed >= 400 (priority CMEs)
@@ -3398,15 +3641,15 @@ export default function IntelligencePage() {
                 return (
                   <button
                     onClick={() => router.push("/cme-alerts")}
-                    className={`bg-white/5 rounded-xl p-4 border border-white/10 hover:border-orange-500/40 transition-all text-left ${isPast ? 'opacity-50' : ''}`}
+                    className={`bg-white/5 rounded-xl p-3 sm:p-4 border border-white/10 hover:border-orange-500/40 transition-all text-left ${isPast ? 'opacity-50' : ''}`}
                   >
                     <div className="text-xs text-gray-400 mb-1">CME "Red" Alert</div>
                     {loadingCme ? (
-                      <div className="text-lg font-bold text-gray-500">Loading...</div>
+                      <div className="text-base sm:text-lg font-bold text-gray-500">Loading...</div>
                     ) : displayCme ? (
                       <>
                         <div
-                          className="text-2xl font-bold"
+                          className="text-xl sm:text-2xl font-bold"
                           style={{ color: getSpeedColor(displayCme.speed) }}
                         >
                           {getSpeedEmoji(displayCme.speed)} {getSpeedLabel(displayCme.speed)}
@@ -3417,7 +3660,7 @@ export default function IntelligencePage() {
                       </>
                     ) : (
                       <>
-                        <div className="text-2xl font-bold text-gray-500">None</div>
+                        <div className="text-xl sm:text-2xl font-bold text-gray-500">None</div>
                         <div className="text-xs text-gray-500 mt-1">No active CME</div>
                       </>
                     )}
@@ -3426,14 +3669,14 @@ export default function IntelligencePage() {
               })()}
 
               {/* Solar Flare Activity Card */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="bg-white/5 rounded-xl p-3 sm:p-4 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1">Solar Flare Activity</div>
                 {loadingFlare ? (
-                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                  <div className="text-base sm:text-lg font-bold text-gray-500">Loading...</div>
                 ) : solarFlare ? (
                   <>
                     <div
-                      className="text-2xl font-bold"
+                      className="text-xl sm:text-2xl font-bold"
                       style={{
                         color: solarFlare.class === 'X' ? '#ef4444' :
                                solarFlare.class === 'M' ? '#f59e0b' :
@@ -3447,19 +3690,19 @@ export default function IntelligencePage() {
                     </div>
                   </>
                 ) : (
-                  <div className="text-lg font-bold text-green-500">Quiet</div>
+                  <div className="text-base sm:text-lg font-bold text-green-500">Quiet</div>
                 )}
               </div>
 
               {/* Sunspot Number Card */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="bg-white/5 rounded-xl p-3 sm:p-4 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1">Sunspot Number</div>
                 {loadingSunspot ? (
-                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                  <div className="text-base sm:text-lg font-bold text-gray-500">Loading...</div>
                 ) : (
                   <>
                     <div
-                      className="text-2xl font-bold"
+                      className="text-xl sm:text-2xl font-bold"
                       style={{
                         color: sunspotNumber !== null ?
                           (sunspotNumber >= 150 ? '#22c55e' :
@@ -3475,102 +3718,6 @@ export default function IntelligencePage() {
                 )}
               </div>
             </div>
-
-            {/* CME Alerts Card */}
-            {!loadingCme && cmeAlertsList.length > 0 && (
-              <div className="bg-gradient-to-br from-[#3d2020] to-[#2a1515] backdrop-blur-lg rounded-2xl p-6 border border-[#5a3030]/50">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="text-2xl">☄️</span>
-                  <span className="text-xl font-bold text-orange-200">CME Alerts</span>
-                  <span className="text-xs text-gray-400 ml-2">({cmeAlertsList.length} active)</span>
-                </div>
-
-                <div className="space-y-3">
-                  {cmeAlertsList.map((cme, index) => {
-                    // Use minimum Kp for high priority check (e.g., "5-7" min is 5, "3-5" min is 3)
-                    const kpParts = cme.expectedKp.split('-');
-                    const minKp = parseInt(kpParts[0]);
-                    const isHighPriority = minKp >= 5 || cme.speed >= 700;
-
-                    return (
-                      <div
-                        key={index}
-                        className={`rounded-xl p-4 ${
-                          isHighPriority
-                            ? 'bg-[#4a2828]/60 border border-orange-500/40'
-                            : 'bg-black/20 border border-white/10'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          {/* Left side - CME Details */}
-                          <div className="flex-1 space-y-2">
-                            {/* Type */}
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg font-bold text-white">{cme.type}</span>
-                            </div>
-
-                            {/* Details - Vertical Layout */}
-                            <div className="space-y-1 text-sm">
-                              <div>
-                                <span className="text-gray-500">Detected:</span>
-                                <span className="text-gray-300 ml-2">
-                                  {(() => {
-                                    const date = new Date(cme.detectedAt);
-                                    const dateStr = date.toISOString().split('T')[0];
-                                    const timeStr = date.toISOString().split('T')[1].substring(0, 5);
-                                    return `${dateStr} @ ${timeStr} UT`;
-                                  })()}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Speed:</span>
-                                <span className="ml-2 font-medium text-gray-200">
-                                  {cme.speed} km/s {cme.speed >= 500 ? '🟢' : cme.speed >= 400 ? '🟡' : '🔴'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Expected Kp:</span>
-                                <span className="ml-2 font-medium text-gray-200">{cme.expectedKp}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Right side - Predicted Arrival + Plan Hunt Button */}
-                          <div className="flex flex-col items-end">
-                            {isHighPriority && (
-                              <span className="text-red-400 text-xs font-bold mb-1">High Priority!</span>
-                            )}
-                            <div className="text-right mb-2">
-                              <div className="text-[10px] text-gray-500 uppercase">Predicted Arrival</div>
-                              <div className="text-orange-200 font-semibold">{cme.arrivalDate}</div>
-                            </div>
-                            {cme.speed >= 400 && (
-                              <button
-                                onClick={() => {
-                                  setActiveTab("aurora-intel");
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                                className={`px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${
-                                  isHighPriority
-                                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black'
-                                    : 'bg-gradient-to-r from-rose-700 to-orange-700 hover:from-rose-600 hover:to-orange-600 text-white'
-                                }`}
-                              >
-                                Plan Hunt
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-500">
-                  High Priority: Minimum Kp 5+ expected or speed 700+ km/s
-                </div>
-              </div>
-            )}
 
             {/* Solar Flare Insights Card */}
             {!loadingFlare && solarFlare && (
@@ -3655,8 +3802,221 @@ export default function IntelligencePage() {
                   );
                 })()}
 
+                {/* X-Ray Flux Chart */}
+                {flareChartData.length > 0 && (
+                  <div className="mt-4 bg-black/40 rounded-xl border border-white/10 overflow-hidden">
+                    <div className="bg-gray-900/50 px-4 py-2 border-b border-white/10">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-white">3-Day X-Ray Flux</div>
+                          <div className="text-xs text-gray-500">GOES-16 (1-8 Angstrom)</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-500">Current</div>
+                          <div className="text-lg font-bold" style={{ color: getFlareColor(solarFlare.class) }}>
+                            {solarFlare.class}{solarFlare.intensity.toFixed(1)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-2" style={{ backgroundColor: '#000' }}>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <LineChart data={flareChartData} margin={{ top: 10, right: 45, left: 5, bottom: 20 }}>
+                          {/* Color-coded flare class zones */}
+                          <ReferenceArea y1={1e-4} y2={1e-2} fill="#ff0000" fillOpacity={0.15} />
+                          <ReferenceArea y1={1e-5} y2={1e-4} fill="#ffaa00" fillOpacity={0.15} />
+                          <ReferenceArea y1={1e-6} y2={1e-5} fill="#ffff00" fillOpacity={0.15} />
+                          <ReferenceArea y1={1e-7} y2={1e-6} fill="#7fff00" fillOpacity={0.15} />
+                          <ReferenceArea y1={1e-9} y2={1e-7} fill="#00ff00" fillOpacity={0.15} />
+
+                          <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+
+                          <XAxis
+                            dataKey="timestamp"
+                            type="number"
+                            domain={['dataMin', 'dataMax']}
+                            tickFormatter={formatFlareXAxisTime}
+                            stroke="#666"
+                            tick={{ fill: '#666', fontSize: 10 }}
+                            ticks={[
+                              flareChartData[0]?.timestamp || 0,
+                              flareChartData[Math.floor(flareChartData.length / 2)]?.timestamp || 0,
+                            ]}
+                          />
+
+                          <YAxis
+                            scale="log"
+                            domain={[1e-9, 1e-2]}
+                            tickFormatter={(value) => value.toExponential(0)}
+                            stroke="#666"
+                            tick={{ fill: '#666', fontSize: 10 }}
+                            ticks={[1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3]}
+                            width={45}
+                          />
+
+                          {/* Flare class reference lines */}
+                          <ReferenceLine y={1e-4} stroke="#ff0000" strokeDasharray="3 3" label={{ value: 'X', position: 'right', fill: '#ff0000', fontSize: 11, fontWeight: 'bold' }} />
+                          <ReferenceLine y={1e-5} stroke="#ffaa00" strokeDasharray="3 3" label={{ value: 'M', position: 'right', fill: '#ffaa00', fontSize: 11, fontWeight: 'bold' }} />
+                          <ReferenceLine y={1e-6} stroke="#ffff00" strokeDasharray="3 3" label={{ value: 'C', position: 'right', fill: '#ffff00', fontSize: 11, fontWeight: 'bold' }} />
+                          <ReferenceLine y={1e-7} stroke="#7fff00" strokeDasharray="3 3" label={{ value: 'B', position: 'right', fill: '#7fff00', fontSize: 11, fontWeight: 'bold' }} />
+                          <ReferenceLine y={1e-8} stroke="#00ff00" strokeDasharray="3 3" label={{ value: 'A', position: 'right', fill: '#00ff00', fontSize: 11, fontWeight: 'bold' }} />
+
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #444', borderRadius: '8px', fontSize: '12px' }}
+                            labelStyle={{ color: '#fff' }}
+                            formatter={((value: number) => [`${value.toExponential(2)} W/m²`, 'X-Ray Flux']) as any}
+                            labelFormatter={(timestamp: number) => new Date(timestamp).toLocaleString()}
+                          />
+
+                          <Line
+                            type="monotone"
+                            dataKey="flux"
+                            stroke="#3b82f6"
+                            strokeWidth={1.5}
+                            dot={false}
+                            isAnimationActive={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="bg-gray-900/30 px-3 py-2 border-t border-white/10">
+                      <div className="flex items-center justify-between text-[10px] text-gray-500">
+                        <span>NOAA/SWPC • Updates every 5 min</span>
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span>X</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span>M</span>
+                          <span className="text-gray-600">= Major flares</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-500">
                   Solar flares can trigger CMEs. X-class + Earth-facing = potential aurora in 2-3 days.
+                </div>
+              </div>
+            )}
+
+            {/* CME Alerts Card */}
+            {!loadingCme && cmeAlertsList.length > 0 && (
+              <div className="bg-gradient-to-br from-[#3d2020] to-[#2a1515] backdrop-blur-lg rounded-2xl p-6 border border-[#5a3030]/50">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">☄️</span>
+                  <span className="text-xl font-bold text-orange-200">CME Alerts</span>
+                  <span className="text-xs text-gray-400 ml-2">({cmeAlertsList.length} active)</span>
+                </div>
+
+                <div className="space-y-3">
+                  {cmeAlertsList.map((cme, index) => {
+                    // Use minimum Kp for high priority check (e.g., "5-7" min is 5, "3-5" min is 3)
+                    const kpParts = cme.expectedKp.split('-');
+                    const minKp = parseInt(kpParts[0]);
+
+                    // Earth-directed check: Earth (at lon=0) is within the CME cone
+                    // Add 15° buffer for measurement uncertainty
+                    const isEarthDirected = Math.abs(cme.longitude) <= (cme.halfAngle + 15);
+                    const isHalo = cme.halfAngle >= 60;
+
+                    // High priority: Earth-directed AND (high Kp expected OR fast CME)
+                    const isHighPriority = isEarthDirected && (minKp >= 5 || cme.speed >= 700);
+
+                    // Worth planning: Earth-directed with significant speed, OR wide halo CME
+                    const isWorthPlanning = (isEarthDirected && cme.speed >= 400) || (isHalo && cme.speed >= 350);
+
+                    return (
+                      <div
+                        key={index}
+                        className={`rounded-xl p-4 ${
+                          isHighPriority
+                            ? 'bg-[#4a2828]/60 border border-orange-500/40'
+                            : !isEarthDirected
+                            ? 'bg-black/10 border border-white/5 opacity-40'
+                            : 'bg-black/20 border border-white/10'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          {/* Left side - CME Details */}
+                          <div className="flex-1 space-y-2">
+                            {/* Type */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-bold text-white">{cme.type}</span>
+                            </div>
+
+                            {/* Details - Vertical Layout */}
+                            <div className="space-y-1 text-sm">
+                              <div>
+                                <span className="text-gray-500">Detected:</span>
+                                <span className="text-gray-300 ml-2">
+                                  {(() => {
+                                    const date = new Date(cme.detectedAt);
+                                    const dateStr = date.toISOString().split('T')[0];
+                                    const timeStr = date.toISOString().split('T')[1].substring(0, 5);
+                                    return `${dateStr} @ ${timeStr} UT`;
+                                  })()}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Speed:</span>
+                                <span className="ml-2 font-medium text-gray-200">
+                                  {cme.speed} km/s {cme.speed >= 500 ? '🟢' : cme.speed >= 400 ? '🟡' : '🔴'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Direction:</span>
+                                <span className="ml-2 font-medium text-gray-200">
+                                  lon: {cme.longitude > 0 ? '+' : ''}{cme.longitude}°, width: {cme.halfAngle}°
+                                </span>
+                                {Math.abs(cme.longitude) <= cme.halfAngle && (
+                                  <span className="ml-2 text-green-400 text-xs">✓ Earth in cone</span>
+                                )}
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Expected Kp:</span>
+                                <span className="ml-2 font-medium text-gray-200">{cme.expectedKp}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right side - Predicted Arrival + Plan Hunt Button */}
+                          <div className="flex flex-col items-end">
+                            {isHighPriority && (
+                              <span className="text-red-400 text-xs font-bold mb-1">High Priority!</span>
+                            )}
+                            <div className="text-right mb-2">
+                              <div className="text-[10px] text-gray-500 uppercase">Predicted Arrival</div>
+                              <div className="text-orange-200 font-semibold">{cme.arrivalDate}</div>
+                            </div>
+                            {isWorthPlanning && (
+                              <button
+                                onClick={() => {
+                                  setActiveTab("aurora-intel");
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                className={`px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${
+                                  isHighPriority
+                                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black'
+                                    : 'bg-gradient-to-r from-rose-700 to-orange-700 hover:from-rose-600 hover:to-orange-600 text-white'
+                                }`}
+                              >
+                                Plan Hunt
+                              </button>
+                            )}
+                            {!isEarthDirected && (
+                              <span className="text-xs text-gray-500 mt-1">Not Earth-directed</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-500">
+                  <div>🟠 High Priority: Earth-directed + (Kp 5+ or 700+ km/s)</div>
+                  <div>✓ Earth in cone: |longitude| ≤ half-angle</div>
                 </div>
               </div>
             )}
@@ -3811,58 +4171,58 @@ export default function IntelligencePage() {
           <div className="space-y-6">
             {/* Aurora Intelligence - Real-time Decision System */}
             <div className="space-y-4">
-              <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-3xl font-bold text-white">🚀 Aurora Intelligence Advisor</h2>
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                <h2 className="text-2xl sm:text-3xl font-bold text-white">🚀 Aurora Intel Advisor</h2>
               </div>
 
               {/* Tab Navigation Cards - 3 Column Grid */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {/* Aurora Forecast - Links to Cosmic Tab */}
                 <button
                   onClick={() => setActiveTab("cosmic")}
-                  className="bg-gradient-to-br from-purple-900/40 to-indigo-900/40 rounded-xl p-4 border border-purple-500/30 hover:scale-[1.02] hover:border-purple-400/50 transition-all"
+                  className="bg-gradient-to-br from-purple-900/40 to-indigo-900/40 rounded-xl p-3 sm:p-4 border border-purple-500/30 hover:scale-[1.02] hover:border-purple-400/50 transition-all"
                 >
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <span className="text-5xl">🌠</span>
-                    <h3 className="text-sm font-bold text-white">Aurora Forecast</h3>
+                  <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                    <span className="text-4xl sm:text-5xl">🌠</span>
+                    <h3 className="text-xs sm:text-sm font-bold text-white">Aurora Forecast</h3>
                   </div>
                 </button>
 
                 {/* Aurora Now - Links to Aurora Tab */}
                 <button
                   onClick={() => setActiveTab("aurora-intel")}
-                  className="bg-gradient-to-br from-emerald-900/40 to-teal-900/40 rounded-xl p-4 border border-emerald-500/30 hover:scale-[1.02] hover:border-emerald-400/50 transition-all"
+                  className="bg-gradient-to-br from-emerald-900/40 to-teal-900/40 rounded-xl p-3 sm:p-4 border border-emerald-500/30 hover:scale-[1.02] hover:border-emerald-400/50 transition-all"
                 >
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <span className="text-5xl">🌍</span>
-                    <h3 className="text-sm font-bold text-white">Aurora Now</h3>
+                  <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                    <span className="text-4xl sm:text-5xl">🌍</span>
+                    <h3 className="text-xs sm:text-sm font-bold text-white">Aurora Now</h3>
                   </div>
                 </button>
 
                 {/* Cloud Intel - Links to Cloud Tab */}
                 <button
                   onClick={() => setActiveTab("cloud")}
-                  className="bg-gradient-to-br from-blue-900/40 to-cyan-900/40 rounded-xl p-4 border border-blue-500/30 hover:scale-[1.02] hover:border-blue-400/50 transition-all"
+                  className="bg-gradient-to-br from-blue-900/40 to-cyan-900/40 rounded-xl p-3 sm:p-4 border border-blue-500/30 hover:scale-[1.02] hover:border-blue-400/50 transition-all"
                 >
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <span className="text-5xl">☁️</span>
-                    <h3 className="text-sm font-bold text-white">Cloud Intel</h3>
+                  <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                    <span className="text-4xl sm:text-5xl">☁️</span>
+                    <h3 className="text-xs sm:text-sm font-bold text-white">Cloud Intel</h3>
                   </div>
                 </button>
               </div>
 
               {/* External Links - 3 Column Grid */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {/* Solar Data */}
                 <a
                   href="https://www.solarham.com/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-xl p-4 border border-slate-600/30 hover:scale-[1.02] transition-transform"
+                  className="bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-xl p-3 sm:p-4 border border-slate-600/30 hover:scale-[1.02] transition-transform"
                 >
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <span className="text-5xl">☀️</span>
-                    <h3 className="text-sm font-bold text-white">Solar Data</h3>
+                  <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                    <span className="text-4xl sm:text-5xl">☀️</span>
+                    <h3 className="text-xs sm:text-sm font-bold text-white">Solar Data</h3>
                   </div>
                 </a>
 
@@ -3871,11 +4231,11 @@ export default function IntelligencePage() {
                   href="https://lightpollutionmap.app/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-xl p-4 border border-slate-600/30 hover:scale-[1.02] transition-transform"
+                  className="bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-xl p-3 sm:p-4 border border-slate-600/30 hover:scale-[1.02] transition-transform"
                 >
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <span className="text-5xl">🗺️</span>
-                    <h3 className="text-sm font-bold text-white">Light Data</h3>
+                  <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                    <span className="text-4xl sm:text-5xl">🗺️</span>
+                    <h3 className="text-xs sm:text-sm font-bold text-white">Light Data</h3>
                   </div>
                 </a>
 
@@ -3884,11 +4244,11 @@ export default function IntelligencePage() {
                   href="https://zoom.earth/maps/satellite/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-xl p-4 border border-slate-600/30 hover:scale-[1.02] transition-transform"
+                  className="bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-xl p-3 sm:p-4 border border-slate-600/30 hover:scale-[1.02] transition-transform"
                 >
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <span className="text-5xl">🛰️</span>
-                    <h3 className="text-sm font-bold text-white">Cloud Data</h3>
+                  <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                    <span className="text-4xl sm:text-5xl">🛰️</span>
+                    <h3 className="text-xs sm:text-sm font-bold text-white">Cloud Data</h3>
                   </div>
                 </a>
               </div>
@@ -3897,12 +4257,12 @@ export default function IntelligencePage() {
               <div className="space-y-4">
                 {/* Gate 1: Can Aurora Happen? */}
                 <div
-                  className="bg-gradient-to-br from-purple-900/60 to-indigo-900/60 rounded-xl p-5 border-2 border-purple-500/40"
+                  className="bg-gradient-to-br from-purple-900/60 to-indigo-900/60 rounded-xl p-4 sm:p-5 border-2 border-purple-500/40"
                 >
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-2xl">🌌</span>
+                    <span className="text-xl sm:text-2xl">🌌</span>
                     <div>
-                      <h3 className="text-lg font-bold text-white">Is there Aurora?</h3>
+                      <h3 className="text-base sm:text-lg font-bold text-white">Is there Aurora?</h3>
                     </div>
                   </div>
 
@@ -3931,17 +4291,17 @@ export default function IntelligencePage() {
                     return (
                       <>
                         {/* Verdict at the top */}
-                        <div className={`${gate1Color} border-2 rounded-lg p-4 text-center mb-3 min-h-[140px] flex flex-col items-center justify-center`}>
+                        <div className={`${gate1Color} border-2 rounded-lg p-3 sm:p-4 text-center mb-3 min-h-[120px] sm:min-h-[140px] flex flex-col items-center justify-center`}>
                           {/* Main Verdict */}
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="text-3xl">{verdict.strengthEmoji}</span>
-                            <div className={`text-2xl font-bold ${gate1TextColor} leading-tight`}>
+                            <span className="text-2xl sm:text-3xl">{verdict.strengthEmoji}</span>
+                            <div className={`text-xl sm:text-2xl font-bold ${gate1TextColor} leading-tight`}>
                               {verdict.strengthCategory}
                             </div>
                           </div>
 
                           {/* Intensity Score */}
-                          <div className="text-sm text-white/90 font-medium mb-1">
+                          <div className="text-xs sm:text-sm text-white/90 font-medium mb-1">
                             Intensity: {verdict.intensityScore.toFixed(0)}/100 • {verdict.likelihood}
                           </div>
 
@@ -3981,17 +4341,6 @@ export default function IntelligencePage() {
                           {/* Alert Level */}
                           <div className={`text-xs ${gate1TextColor} uppercase tracking-wide font-bold`}>
                             {verdict.alertLevel}
-                          </div>
-                        </div>
-
-                        {/* Viewing Tip */}
-                        <div className="bg-black/30 rounded-lg p-3 mb-3 border border-white/10">
-                          <div className="flex items-start gap-2">
-                            <span className="text-lg">💡</span>
-                            <div className="flex-1">
-                              <div className="text-xs text-gray-400 uppercase mb-1">Viewing Tip</div>
-                              <div className="text-sm text-white font-medium">{verdict.viewingTip}</div>
-                            </div>
                           </div>
                         </div>
 
@@ -4111,9 +4460,9 @@ export default function IntelligencePage() {
                               <div className="relative h-16 bg-black/30 rounded-lg overflow-hidden">
                                 {/* Center line (Bz = 0) */}
                                 <div className="absolute left-0 right-0 top-1/2 h-px bg-gray-600" />
-                                {/* Labels */}
-                                <div className="absolute left-1 top-1 text-[10px] text-red-400/60">+North</div>
-                                <div className="absolute left-1 bottom-1 text-[10px] text-green-400/60">−South</div>
+                                {/* Labels with max/min values */}
+                                <div className="absolute left-1 top-1 text-[10px] text-red-400/60">+North {bzHistory.maxBz > 0 ? `(+${bzHistory.maxBz.toFixed(1)})` : ''}</div>
+                                <div className="absolute left-1 bottom-1 text-[10px] text-green-400/60">−South ({bzHistory.minBz.toFixed(1)})</div>
                                 {/* Dots */}
                                 <svg className="w-full h-full" preserveAspectRatio="none">
                                   {bzHistory.readings.map((bz, i) => {
@@ -4219,63 +4568,178 @@ export default function IntelligencePage() {
                               <span className="text-xs text-gray-500">in ~{speed > 0 ? Math.round(1500000 / speed / 60) : '--'} min</span>
                             </div>
                             {(() => {
+                              // === COMPREHENSIVE AURORA FORECAST ENGINE ===
+                              // Uses: L1 Bz (30-60 min ahead), Bz trend, substorm phase,
+                              // energy loading, solar wind speed/density, current intensity
+
                               const transitMin = speed > 0 ? Math.round(1500000 / speed / 60) : 45;
                               const arrivalTime = new Date(Date.now() + transitMin * 60 * 1000);
                               const timeStr = arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                              // Determine forecast based on current L1 readings
-                              if (currentBz !== null && currentBz <= -5 && bzHistory?.bzTrend === 'strengthening') {
+                              // Current state analysis
+                              const hasAuroraNow = verdict.intensityScore > 25;
+                              const strongAuroraNow = verdict.intensityScore > 50;
+                              const l1Bz = currentBz || 0;
+                              const trend = bzHistory?.bzTrend || 'stable';
+                              const phase = energyState.substormPhase;
+                              const loading = energyState.loadingLevel;
+                              const sustained15 = bzHistory?.isSustained15 || false;
+                              const sustained45 = bzHistory?.isSustained45 || false;
+                              const minutesSouth = bzHistory?.minutesSouth || 0;
+                              const highSpeed = speed > 500;
+                              const veryHighSpeed = speed > 600;
+
+                              // === SCENARIO DETECTION (Priority Order) ===
+
+                              // 1. SUBSTORM EXPANSION + Strong conditions = PEAK ACTIVITY
+                              if (phase === 'expansion' && strongAuroraNow) {
+                                const windowLeft = l1Bz >= -2 ? '~30-45 min' : '1-2+ hours';
                                 return (
-                                  <div className="bg-green-500/20 border border-green-500/40 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-green-300 mb-1">🟢 Aurora likely improving</div>
+                                  <div className="bg-gradient-to-r from-green-500/30 to-emerald-500/30 border border-green-400/60 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-green-300 mb-1">🌟 PEAK ACTIVITY NOW</div>
                                     <p className="text-xs text-green-200">
-                                      Strong southward Bz ({currentBz?.toFixed(1)} nT) heading to Earth.
-                                      <span className="block mt-1 font-semibold">→ Be ready by {timeStr}</span>
-                                    </p>
-                                  </div>
-                                );
-                              } else if (currentBz !== null && currentBz <= -3) {
-                                return (
-                                  <div className="bg-green-500/15 border border-green-500/30 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-green-300 mb-1">🟢 Good conditions incoming</div>
-                                    <p className="text-xs text-green-200">
-                                      Southward Bz ({currentBz?.toFixed(1)} nT) will reach Earth soon.
-                                      <span className="block mt-1 font-semibold">→ Check again at {timeStr}</span>
-                                    </p>
-                                  </div>
-                                );
-                              } else if (currentBz !== null && currentBz >= 0 && bzHistory?.bzTrend === 'weakening') {
-                                return (
-                                  <div className="bg-yellow-500/20 border border-yellow-500/40 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-yellow-300 mb-1">🟡 Conditions fading</div>
-                                    <p className="text-xs text-yellow-200">
-                                      Bz turning north at L1 — aurora may weaken.
-                                      <span className="block mt-1 font-semibold">→ Go out NOW if skies are clear</span>
-                                    </p>
-                                  </div>
-                                );
-                              } else if (currentBz !== null && currentBz >= 2) {
-                                return (
-                                  <div className="bg-red-500/15 border border-red-500/30 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-red-300 mb-1">🔴 Quiet conditions ahead</div>
-                                    <p className="text-xs text-red-200">
-                                      Northward Bz (+{currentBz?.toFixed(1)} nT) — not favorable for aurora.
-                                      <span className="block mt-1 font-semibold">→ Check back later or monitor CME alerts</span>
-                                    </p>
-                                  </div>
-                                );
-                              } else {
-                                return (
-                                  <div className="bg-gray-500/15 border border-gray-500/30 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-gray-300 mb-1">⚪ Uncertain conditions</div>
-                                    <p className="text-xs text-gray-300">
-                                      Bz near zero ({currentBz?.toFixed(1)} nT) — could go either way.
-                                      <span className="block mt-1 font-semibold">→ Monitor Bz trend for changes</span>
+                                      Substorm expansion phase — maximum brightness!
+                                      {l1Bz >= 0 && <span className="block text-yellow-300">⚠️ L1 turning north — window: {windowLeft}</span>}
+                                      {l1Bz < -5 && <span className="block">Strong Bz at L1 — extended viewing likely</span>}
+                                      <span className="block mt-1 font-semibold">→ GO OUT NOW — this is the best time!</span>
                                     </p>
                                   </div>
                                 );
                               }
+
+                              // 2. GROWTH PHASE + Energy loading = SUBSTORM IMMINENT
+                              if (phase === 'growth' && loading > 50 && sustained15) {
+                                const onsetTime = energyState.timeToOnset || 20;
+                                return (
+                                  <div className="bg-gradient-to-r from-yellow-500/30 to-orange-500/30 border border-yellow-400/60 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-yellow-300 mb-1">⚡ SUBSTORM BUILDING</div>
+                                    <p className="text-xs text-yellow-200">
+                                      Energy loading {loading.toFixed(0)}% — substorm onset likely in ~{onsetTime} min.
+                                      {trend === 'strengthening' && <span className="block text-green-300">Bz strengthening — explosive onset possible!</span>}
+                                      <span className="block mt-1 font-semibold">→ Get ready NOW — sudden brightening expected!</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+
+                              // 3. Strong southward Bz at L1 but quiet at Earth = AURORA COMING
+                              if (l1Bz <= -5 && !hasAuroraNow && trend !== 'weakening') {
+                                return (
+                                  <div className="bg-gradient-to-r from-blue-500/30 to-cyan-500/30 border border-blue-400/60 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-blue-300 mb-1">🔵 AURORA INCOMING</div>
+                                    <p className="text-xs text-blue-200">
+                                      Strong southward Bz ({l1Bz.toFixed(1)} nT) at L1 heading to Earth.
+                                      {highSpeed && <span className="block text-cyan-300">Fast solar wind ({speed.toFixed(0)} km/s) — arrival in ~{transitMin} min</span>}
+                                      {!highSpeed && <span className="block">Expected arrival: ~{timeStr}</span>}
+                                      <span className="block mt-1 font-semibold">→ Be ready by {timeStr} — conditions improving!</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+
+                              // 4. Moderate southward Bz at L1 = GRADUAL IMPROVEMENT
+                              if (l1Bz <= -3 && l1Bz > -5 && trend !== 'weakening') {
+                                return (
+                                  <div className="bg-green-500/15 border border-green-500/40 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-green-300 mb-1">🟢 Conditions improving</div>
+                                    <p className="text-xs text-green-200">
+                                      Southward Bz ({l1Bz.toFixed(1)} nT) — favorable for aurora.
+                                      {sustained15 && <span className="block">Sustained {minutesSouth}min — energy building</span>}
+                                      <span className="block mt-1 font-semibold">→ Check again at {timeStr}</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+
+                              // 5. RECOVERY PHASE = Activity winding down
+                              if (phase === 'recovery' && hasAuroraNow) {
+                                const secondaryChance = l1Bz < -3 ? 'Secondary peak possible!' : 'Fading gradually.';
+                                return (
+                                  <div className="bg-purple-500/20 border border-purple-400/50 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-purple-300 mb-1">🟣 Recovery phase</div>
+                                    <p className="text-xs text-purple-200">
+                                      Substorm winding down — {secondaryChance}
+                                      {l1Bz < -3 && <span className="block text-green-300">Bz still south at L1 — may reignite!</span>}
+                                      {l1Bz >= 0 && <span className="block text-yellow-300">L1 turning north — this may be the end</span>}
+                                      <span className="block mt-1 font-semibold">→ Still worth watching for ~30-60 min</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+
+                              // 6. Aurora NOW but L1 turning north = WINDOW CLOSING
+                              if (hasAuroraNow && l1Bz >= -1 && (trend === 'weakening' || l1Bz >= 0)) {
+                                return (
+                                  <div className="bg-gradient-to-r from-orange-500/30 to-red-500/30 border border-orange-400/60 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-orange-300 mb-1">🟠 WINDOW CLOSING</div>
+                                    <p className="text-xs text-orange-200">
+                                      Aurora visible now but L1 shows Bz turning north.
+                                      <span className="block">Current window: ~{transitMin}-{transitMin + 20} min remaining</span>
+                                      <span className="block mt-1 font-semibold">→ GO OUT NOW — don't miss this window!</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+
+                              // 7. Bz oscillating near zero = UNSTABLE
+                              if (l1Bz > -3 && l1Bz < 1 && trend === 'stable') {
+                                return (
+                                  <div className="bg-gray-500/20 border border-gray-400/40 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-gray-300 mb-1">⚪ Unstable conditions</div>
+                                    <p className="text-xs text-gray-300">
+                                      Bz near zero ({l1Bz.toFixed(1)} nT) — could swing either way.
+                                      {highSpeed && <span className="block text-cyan-300">High speed wind — watch for sudden changes</span>}
+                                      <span className="block mt-1 font-semibold">→ Monitor closely — conditions may change rapidly</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+
+                              // 8. Positive Bz, quiet phase = NOT FAVORABLE
+                              if (l1Bz >= 1 && phase === 'quiet' && !hasAuroraNow) {
+                                return (
+                                  <div className="bg-red-500/15 border border-red-500/30 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-red-300 mb-1">🔴 Quiet — no aurora expected</div>
+                                    <p className="text-xs text-red-200">
+                                      Northward Bz (+{l1Bz.toFixed(1)} nT) blocks aurora formation.
+                                      {veryHighSpeed && <span className="block text-yellow-300">High speed stream — watch for Bz fluctuations</span>}
+                                      <span className="block mt-1 font-semibold">→ Check back in 1-2 hours or monitor CME alerts</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+
+                              // 9. Default fallback
+                              return (
+                                <div className="bg-gray-500/15 border border-gray-500/30 rounded-lg p-3">
+                                  <div className="text-sm font-bold text-gray-300 mb-1">⚪ Monitoring conditions</div>
+                                  <p className="text-xs text-gray-300">
+                                    Bz: {l1Bz.toFixed(1)} nT | Phase: {phase} | Loading: {loading.toFixed(0)}%
+                                    <span className="block mt-1 font-semibold">→ Continue monitoring for changes</span>
+                                  </p>
+                                </div>
+                              );
                             })()}
+                          </div>
+
+                          {/* Viewing Tip */}
+                          <div className="bg-black/30 rounded-lg p-3 border border-white/10">
+                            <div className="flex items-start gap-2">
+                              <span className="text-lg">💡</span>
+                              <div className="flex-1">
+                                <div className="text-xs text-gray-400 uppercase mb-1">Viewing Tip</div>
+                                <div className="text-sm text-white font-medium">{verdict.viewingTip}</div>
+                                {/* Show explanation for why conditions aren't favorable */}
+                                {verdict.viewingTip.toLowerCase().includes("not favorable") && (() => {
+                                  const explanation = getUnfavorableExplanation(kp, bz, speed, density);
+                                  return explanation ? (
+                                    <div className="text-xs text-gray-400 mt-2 italic">
+                                      {explanation}
+                                    </div>
+                                  ) : null;
+                                })()}
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -5468,7 +5932,7 @@ export default function IntelligencePage() {
                                 onFocus={() => {
                                   if (yourLocationSuggestions.length > 0) setShowYourLocationSuggestions(true);
                                 }}
-                                placeholder="e.g., Oslo, Norway"
+                                placeholder="City, country or postal code"
                                 className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
                                 autoComplete="off"
                               />
@@ -5712,24 +6176,6 @@ export default function IntelligencePage() {
               </div>
             </div>
 
-            {/* Data Sources Button */}
-            <button
-              onClick={() => router.push('/data-sources')}
-              className="w-full bg-gradient-to-br from-slate-800/40 to-gray-800/40 rounded-2xl p-6 border-2 border-slate-600/30 hover:scale-[1.02] transition-transform shadow-lg"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <span className="text-4xl">📊</span>
-                  <div className="text-left">
-                    <h3 className="text-2xl font-bold text-white">Data Sources</h3>
-                    <p className="text-sm text-gray-400 mt-1">View all data sources and real-time update status</p>
-                  </div>
-                </div>
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </button>
           </div>
         </div>
       )}
@@ -5739,57 +6185,57 @@ export default function IntelligencePage() {
         <div className="max-w-screen-lg mx-auto p-4">
           <div className="space-y-4">
             {/* Aurora Intel Title */}
-            <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-3xl font-bold text-white">🌌 Aurora Intel</h2>
+            <div className="flex items-center gap-2 sm:gap-3 mb-2">
+              <h2 className="text-2xl sm:text-3xl font-bold text-white">🌌 Aurora Intel</h2>
             </div>
 
             {/* Navigation Cards - 3 Column Grid */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {/* Kp Index Card */}
               <button
                 onClick={() => router.push("/forecast")}
-                className="bg-gradient-to-br from-indigo-900/40 to-blue-900/40 rounded-xl p-4 border border-indigo-500/30 hover:scale-[1.02] hover:border-indigo-400/50 transition-all"
+                className="bg-gradient-to-br from-indigo-900/40 to-blue-900/40 rounded-xl p-3 sm:p-4 border border-indigo-500/30 hover:scale-[1.02] hover:border-indigo-400/50 transition-all"
               >
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <span className="text-4xl">📊</span>
-                  <h3 className="text-sm font-bold text-white">Kp Index</h3>
+                <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                  <span className="text-3xl sm:text-4xl">📊</span>
+                  <h3 className="text-xs sm:text-sm font-bold text-white">Kp Forecast</h3>
                 </div>
               </button>
 
               {/* Solar Wind Card */}
               <button
                 onClick={() => router.push("/solar-wind")}
-                className="bg-gradient-to-br from-emerald-900/40 to-teal-900/40 rounded-xl p-4 border border-emerald-500/30 hover:scale-[1.02] hover:border-emerald-400/50 transition-all"
+                className="bg-gradient-to-br from-emerald-900/40 to-teal-900/40 rounded-xl p-3 sm:p-4 border border-emerald-500/30 hover:scale-[1.02] hover:border-emerald-400/50 transition-all"
               >
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <span className="text-4xl">🌬️</span>
-                  <h3 className="text-sm font-bold text-white">Solar Wind</h3>
+                <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                  <span className="text-3xl sm:text-4xl">🌬️</span>
+                  <h3 className="text-xs sm:text-sm font-bold text-white">Solar Wind</h3>
                 </div>
               </button>
 
               {/* Experts Card */}
               <button
                 onClick={() => router.push("/experts")}
-                className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 rounded-xl p-4 border border-purple-500/30 hover:scale-[1.02] hover:border-purple-400/50 transition-all"
+                className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 rounded-xl p-3 sm:p-4 border border-purple-500/30 hover:scale-[1.02] hover:border-purple-400/50 transition-all"
               >
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <span className="text-4xl">👨‍🔬</span>
-                  <h3 className="text-sm font-bold text-white">Experts</h3>
+                <div className="flex flex-col items-center gap-1 sm:gap-2 text-center">
+                  <span className="text-3xl sm:text-4xl">👨‍🔬</span>
+                  <h3 className="text-xs sm:text-sm font-bold text-white">Experts</h3>
                 </div>
               </button>
             </div>
 
             {/* Real-time Data Cards - 3 Column Grid */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {/* Bz Reading Card */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="bg-white/5 rounded-xl p-3 sm:p-4 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1">Bz Reading</div>
                 {loadingBz ? (
-                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                  <div className="text-base sm:text-lg font-bold text-gray-500">Loading...</div>
                 ) : (
                   <>
                     <div
-                      className="text-2xl font-bold"
+                      className="text-lg sm:text-xl font-bold"
                       style={{ color: getBzColor(currentBz || 0) }}
                     >
                       {currentBz !== null ? `${currentBz >= 0 ? '+' : ''}${currentBz.toFixed(1)} nT` : '--'}
@@ -5802,14 +6248,14 @@ export default function IntelligencePage() {
               </div>
 
               {/* Density Card */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="bg-white/5 rounded-xl p-3 sm:p-4 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1">Density</div>
                 {loadingSolarWind ? (
-                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                  <div className="text-base sm:text-lg font-bold text-gray-500">Loading...</div>
                 ) : (
                   <>
                     <div
-                      className="text-2xl font-bold"
+                      className="text-lg sm:text-xl font-bold"
                       style={{ color: getDensityColor(solarWindDensity || 0) }}
                     >
                       {solarWindDensity !== null ? `${solarWindDensity.toFixed(1)} p/cm³` : '--'}
@@ -5822,14 +6268,14 @@ export default function IntelligencePage() {
               </div>
 
               {/* Speed Card */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="bg-white/5 rounded-xl p-3 sm:p-4 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1">Speed</div>
                 {loadingSolarWind ? (
-                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                  <div className="text-base sm:text-lg font-bold text-gray-500">Loading...</div>
                 ) : (
                   <>
                     <div
-                      className="text-2xl font-bold"
+                      className="text-lg sm:text-xl font-bold"
                       style={{ color: getSpeedColor(solarWindSpeed || 0) }}
                     >
                       {solarWindSpeed !== null ? `${solarWindSpeed.toFixed(0)} km/s` : '--'}
@@ -5842,14 +6288,14 @@ export default function IntelligencePage() {
               </div>
 
               {/* Bz Trend Card */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="bg-white/5 rounded-xl p-3 sm:p-4 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1">Bz Trend</div>
                 {loadingBz || !bzHistory ? (
-                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                  <div className="text-base sm:text-lg font-bold text-gray-500">Loading...</div>
                 ) : (
                   <>
                     <div
-                      className="text-2xl font-bold capitalize"
+                      className="text-lg sm:text-xl font-bold capitalize truncate"
                       style={{
                         // Positive Bz = no aurora, always red
                         color: (currentBz ?? 0) >= 0 ? '#ef4444' :
@@ -5869,14 +6315,14 @@ export default function IntelligencePage() {
               </div>
 
               {/* Hemisphere Power Card */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="bg-white/5 rounded-xl p-3 sm:p-4 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1">Hemisphere Power</div>
                 {loadingHemispherePower ? (
-                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                  <div className="text-base sm:text-lg font-bold text-gray-500">Loading...</div>
                 ) : (
                   <>
                     <div
-                      className="text-2xl font-bold"
+                      className="text-lg sm:text-xl font-bold"
                       style={{ color: getHemispherePowerColor(hemispherePower?.north || 0) }}
                     >
                       {hemispherePower ? `${hemispherePower.north} GW` : '--'}
@@ -5889,14 +6335,14 @@ export default function IntelligencePage() {
               </div>
 
               {/* Substorm Phase Card */}
-              <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="bg-white/5 rounded-xl p-3 sm:p-4 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1">Substorm Phase</div>
                 {loadingGoesData ? (
-                  <div className="text-lg font-bold text-gray-500">Loading...</div>
+                  <div className="text-base sm:text-lg font-bold text-gray-500">Loading...</div>
                 ) : (
                   <>
                     <div
-                      className="text-2xl font-bold uppercase"
+                      className="text-lg sm:text-xl font-bold uppercase truncate"
                       style={{
                         color: energyState.substormPhase === 'expansion' ? '#ef4444' :
                                energyState.substormPhase === 'growth' ? '#eab308' :
@@ -5915,64 +6361,72 @@ export default function IntelligencePage() {
               </div>
             </div>
 
-            {/* Time Lag Information */}
-            <div className="bg-gradient-to-br from-blue-900/40 to-indigo-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-blue-500/30">
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                <span>⏱️</span>
-                <span>Response Time & Timeline</span>
-              </h2>
-
-              <div className="space-y-4">
-                <div className="bg-black/30 rounded-xl p-4 border border-white/10">
-                  <h3 className="text-lg font-bold text-white mb-2">IMF to Aurora Response</h3>
-                  <ul className="space-y-2 text-sm text-gray-300">
-                    <li className="flex items-start gap-2">
-                      <span className="text-aurora-green">•</span>
-                      <span><strong>L1 monitoring point:</strong> 1.5 million km from Earth</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-aurora-green">•</span>
-                      <span><strong>Transit time to Earth:</strong> 30-60 minutes typically</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-aurora-green">•</span>
-                      <span><strong>Magnetospheric response:</strong> 20-40 minutes after IMF arrival</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-aurora-green">•</span>
-                      <span><strong>Total lag:</strong> ~45-90 minutes from L1 observation to aurora onset</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="bg-black/30 rounded-xl p-4 border border-white/10">
-                  <h3 className="text-lg font-bold text-white mb-2">Substorm Development Timeline</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                        <span className="text-sm font-medium text-white">Growth Phase (30-60 min)</span>
-                      </div>
-                      <p className="text-xs text-gray-400 ml-4">Energy loading, quiet period before onset</p>
+            {/* Location-Based Alert Banner */}
+            {locationAlert && cloudIntelCoords && (
+              <div
+                className="rounded-xl p-4 border-2 mb-2"
+                style={{
+                  backgroundColor: locationAlert.backgroundColor,
+                  borderColor: locationAlert.color,
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: locationAlert.color }}
+                  >
+                    <span className="text-2xl">
+                      {locationAlert.level === 'purple' ? '👁️' :
+                       locationAlert.level === 'red' ? '🌌' :
+                       locationAlert.level === 'orange' ? '⏰' :
+                       locationAlert.level === 'yellow' ? '👀' :
+                       locationAlert.level === 'green' ? '📈' : '😴'}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-lg" style={{ color: locationAlert.color }}>
+                        {locationAlert.title}
+                      </h3>
+                      {cloudIntelLocation && (
+                        <span className="text-xs text-gray-400 bg-gray-800/50 px-2 py-0.5 rounded">
+                          📍 {cloudIntelLocation}
+                        </span>
+                      )}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                        <span className="text-sm font-medium text-white">Expansion Phase (10-30 min)</span>
-                      </div>
-                      <p className="text-xs text-gray-400 ml-4">Aurora brightens dramatically and spreads</p>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-purple-400"></div>
-                        <span className="text-sm font-medium text-white">Recovery Phase (30-120 min)</span>
-                      </div>
-                      <p className="text-xs text-gray-400 ml-4">Aurora fades, pulsating patches remain</p>
+                    <p className="text-sm text-gray-200 mt-1">{locationAlert.message}</p>
+                    <p className="text-sm font-medium mt-2" style={{ color: locationAlert.color }}>
+                      {locationAlert.action}
+                    </p>
+                    {locationAlert.timing.estimatedTime && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        ⏱️ {locationAlert.timing.estimatedTime}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-2 mt-2 text-xs text-gray-400">
+                      <span>{locationAlert.factors.kpContribution}</span>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Location Detection Prompt */}
+            {!cloudIntelCoords && (
+              <button
+                onClick={autoDetectCloudIntelLocation}
+                className="w-full p-4 rounded-xl border-2 border-dashed border-gray-600 hover:border-purple-500 bg-gray-800/30 hover:bg-purple-900/20 transition-all flex items-center justify-center gap-3 mb-2"
+              >
+                <span className="text-2xl">📍</span>
+                <div className="text-left">
+                  <p className="font-medium text-white">Enable Location for Personalized Alerts</p>
+                  <p className="text-xs text-gray-400">Get recommendations based on aurora visibility at your latitude</p>
+                </div>
+              </button>
+            )}
+
+            {/* Aurora 30 Minute Forecast */}
+            <SyncedAuroraPlayers />
 
             {/* Special Conditions */}
             <div className="bg-gradient-to-br from-orange-900/40 to-red-900/40 backdrop-blur-lg rounded-2xl p-6 border-2 border-orange-500/30">

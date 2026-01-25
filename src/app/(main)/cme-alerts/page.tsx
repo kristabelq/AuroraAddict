@@ -67,22 +67,27 @@ export default function CMEAlertsPage() {
     }
   };
 
-  const getCMEType = (halfAngle?: number, type?: string): string => {
-    if (type?.toLowerCase().includes("s")) return "Full Halo";
-    if (halfAngle && halfAngle >= 180) return "Full Halo";
-    if (halfAngle && halfAngle >= 90) return "Partial Halo";
-    if (halfAngle && halfAngle >= 60) return "Wide CME";
-    return "Narrow CME";
+  const getCMEType = (halfAngle?: number): string => {
+    // halfAngle is the half-width of the CME in degrees
+    // Full width = halfAngle * 2
+    if (!halfAngle) return "CME";
+    if (halfAngle >= 180) return "Full Halo";  // 360° full width
+    if (halfAngle >= 60) return "Partial Halo"; // 120°+ full width
+    if (halfAngle >= 30) return "Wide CME";     // 60°+ full width
+    return "Narrow CME";                         // <60° full width
   };
 
   const isEarthDirected = (
     latitude?: number,
     longitude?: number,
-    type?: string,
+    halfAngle?: number,
     enlilList?: any[]
   ): boolean => {
-    if (type?.toLowerCase().includes("s")) return true;
+    // ENLIL model predictions indicate Earth impact
     if (enlilList && enlilList.length > 0) return true;
+    // Full or partial halo CMEs are more likely Earth-directed
+    if (halfAngle && halfAngle >= 60) return true;
+    // CMEs from near disk center are Earth-directed
     if (latitude !== undefined && longitude !== undefined) {
       return Math.abs(latitude) <= 30 && Math.abs(longitude) <= 30;
     }
@@ -185,7 +190,7 @@ export default function CMEAlertsPage() {
         return isEarthDirected(
           analysis.latitude,
           analysis.longitude,
-          analysis.type,
+          analysis.halfAngle,
           analysis.enlilList
         );
       }
@@ -266,7 +271,7 @@ export default function CMEAlertsPage() {
                   {earthDirectedCMEs.map((cme, index) => {
                     const analysis = cme.cmeAnalyses?.find((a) => a.isMostAccurate) || cme.cmeAnalyses?.[0];
                     const speed = analysis?.speed || 0;
-                    const cmeType = getCMEType(analysis?.halfAngle, analysis?.type);
+                    const cmeType = getCMEType(analysis?.halfAngle);
                     const arrivalTime = analysis?.enlilList?.[0]?.estimatedShockArrivalTime;
                     const estimatedArrival = getEstimatedArrival(cme.startTime, speed);
 
@@ -368,7 +373,7 @@ export default function CMEAlertsPage() {
 
                         {analysis?.halfAngle && (
                           <div className="text-xs text-gray-400 mb-2">
-                            Angular Width: {analysis.halfAngle}° ({analysis.halfAngle >= 180 ? "Full Halo" : analysis.halfAngle >= 90 ? "Wide" : "Narrow"})
+                            Angular Width: {analysis.halfAngle * 2}° (half-angle: {analysis.halfAngle}°)
                           </div>
                         )}
 
@@ -414,7 +419,7 @@ export default function CMEAlertsPage() {
                           <div className="flex-1">
                             <div className="text-white font-medium">{formatTime(cme.startTime)}</div>
                             <div className="text-sm text-gray-400">
-                              {cme.sourceLocation || "Source unknown"} • {getCMEType(analysis?.halfAngle, analysis?.type)}
+                              {cme.sourceLocation || "Source unknown"} • {getCMEType(analysis?.halfAngle)}
                             </div>
                             {estimatedArrival && (
                               <div className="text-xs text-aurora-green/80 mt-1">

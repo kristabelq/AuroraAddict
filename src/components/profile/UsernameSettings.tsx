@@ -120,15 +120,12 @@ export default function UsernameSettings({
     if (error) return error;
     if (available) return "Username is available!";
     if (available === false) return "Username is taken";
-    return "Choose a unique username";
+    return "";
   };
 
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Username (Handle)
-        </label>
         <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
             @

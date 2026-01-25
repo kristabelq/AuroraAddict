@@ -119,6 +119,7 @@ export async function GET() {
       // Business account fields
       userType: user.userType,
       verificationStatus: user.verificationStatus,
+      rejectionReason: user.rejectionReason,
       businessName: user.businessName,
       businessCategory: user.businessCategory,
       sightings: user.sightings.map(sighting => ({
@@ -167,23 +168,35 @@ export async function PATCH(req: Request) {
     } = {};
 
     if (bio !== undefined) {
-      updateData.bio = bio;
+      updateData.bio = bio || null;
     }
     if (username !== undefined) {
-      updateData.username = username === "" ? null : username;
+      updateData.username = username === "" || username === null ? null : username;
     }
     if (instagram !== undefined) {
       // Remove @ if user adds it
-      const cleanInstagram = instagram.replace(/^@/, "").trim();
-      updateData.instagram = cleanInstagram === "" ? null : cleanInstagram;
+      if (instagram === null || instagram === "") {
+        updateData.instagram = null;
+      } else {
+        const cleanInstagram = instagram.replace(/^@/, "").trim();
+        updateData.instagram = cleanInstagram === "" ? null : cleanInstagram;
+      }
     }
     if (whatsappNumber !== undefined) {
       // Remove all spaces, dashes, and plus signs
-      const cleanWhatsapp = whatsappNumber.replace(/[\s\-+]/g, "").trim();
-      updateData.whatsappNumber = cleanWhatsapp === "" ? null : cleanWhatsapp;
+      if (whatsappNumber === null || whatsappNumber === "") {
+        updateData.whatsappNumber = null;
+      } else {
+        const cleanWhatsapp = whatsappNumber.replace(/[\s\-+]/g, "").trim();
+        updateData.whatsappNumber = cleanWhatsapp === "" ? null : cleanWhatsapp;
+      }
     }
     if (publicEmail !== undefined) {
-      updateData.publicEmail = publicEmail === "" ? null : publicEmail.trim();
+      if (publicEmail === null || publicEmail === "") {
+        updateData.publicEmail = null;
+      } else {
+        updateData.publicEmail = publicEmail.trim();
+      }
     }
 
     const user = await prisma.user.update({
