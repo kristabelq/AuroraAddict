@@ -9,6 +9,7 @@ import SyncedAuroraPlayers from "@/components/forecast/SyncedAuroraPlayers";
 import { auroraLocations, calculateDistance } from "@/lib/auroraLocations";
 import { calculateAuroraVerdict, getVerdictColor, type AuroraVerdict } from "@/lib/auroraVerdictSystem";
 import { calculateLocationAlert, type LocationAlert, type AlertLevel } from "@/lib/alerts/locationAlerts";
+import { predictAuroraForLocation, type LocationAuroraPrediction } from "@/lib/locationAuroraPrediction";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 
 interface FlareChartDataPoint {
@@ -576,11 +577,21 @@ export default function IntelligencePage() {
   const fetchCurrentKp = async () => {
     try {
       const response = await fetch("/api/space-weather/kp-index");
+      if (!response.ok) {
+        throw new Error(`KP API returned ${response.status}`);
+      }
       const data = await response.json();
+
+      // Validate data is an array before using .slice()
+      if (!Array.isArray(data) || data.length < 2) {
+        console.warn("KP data format unexpected:", typeof data);
+        setLoadingKp(false);
+        return;
+      }
 
       const formattedData = data.slice(1);
       const latestObserved = formattedData
-        .filter((row: string[]) => row[2] === "observed")
+        .filter((row: string[]) => Array.isArray(row) && row[2] === "observed")
         .pop();
 
       if (latestObserved) {
@@ -596,7 +607,17 @@ export default function IntelligencePage() {
   const fetchCurrentBz = async () => {
     try {
       const response = await fetch("/api/space-weather/solar-wind");
+      if (!response.ok) {
+        throw new Error(`Solar wind API returned ${response.status}`);
+      }
       const data = await response.json();
+
+      // Check for error response or invalid data
+      if (data.error || !Array.isArray(data)) {
+        console.warn("Solar wind API error or invalid format:", data.error || "Not an array");
+        setLoadingBz(false);
+        return;
+      }
 
       if (data.length > 1) {
         const latestReading = data[data.length - 1];
@@ -690,26 +711,44 @@ export default function IntelligencePage() {
 
   const fetchSolarWindData = async () => {
     try {
-      const response = await fetch(
-        "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json"
-      );
+      const response = await fetch("/api/space-weather/plasma");
+      if (!response.ok) {
+        throw new Error(`Solar wind API returned ${response.status}`);
+      }
       const data = await response.json();
 
-      if (data.length > 1) {
-        const latestReading = data[data.length - 1];
-        const density = parseFloat(latestReading[1]);
-        const speed = parseFloat(latestReading[2]);
-        const timestamp = latestReading[0]; // Timestamp from API
+      // Check for error response
+      if (data.error) {
+        console.warn("Solar wind API error:", data.error);
+        setLoadingSolarWind(false);
+        return;
+      }
 
-        if (!isNaN(density)) {
-          setSolarWindDensity(density);
-        }
-        if (!isNaN(speed)) {
-          setSolarWindSpeed(speed);
-        }
-        if (timestamp) {
-          setSolarWindLastUpdated(timestamp);
-        }
+      // Validate data is an array
+      if (!Array.isArray(data) || data.length < 2) {
+        console.warn("Solar wind data format unexpected");
+        setLoadingSolarWind(false);
+        return;
+      }
+
+      const latestReading = data[data.length - 1];
+      if (!Array.isArray(latestReading)) {
+        setLoadingSolarWind(false);
+        return;
+      }
+
+      const density = parseFloat(latestReading[1]);
+      const speed = parseFloat(latestReading[2]);
+      const timestamp = latestReading[0]; // Timestamp from API
+
+      if (!isNaN(density)) {
+        setSolarWindDensity(density);
+      }
+      if (!isNaN(speed)) {
+        setSolarWindSpeed(speed);
+      }
+      if (timestamp) {
+        setSolarWindLastUpdated(timestamp);
       }
       setLoadingSolarWind(false);
     } catch (error) {
@@ -997,10 +1036,18 @@ export default function IntelligencePage() {
 
   const fetchSolarFlareData = async () => {
     try {
-      const response = await fetch(
-        "https://services.swpc.noaa.gov/json/goes/primary/xrays-7-day.json"
-      );
+      const response = await fetch("/api/space-weather/xrays");
+      if (!response.ok) {
+        throw new Error(`X-ray API returned ${response.status}`);
+      }
       const data = await response.json();
+
+      // Check for error response
+      if (data.error) {
+        console.warn("X-ray API error:", data.error);
+        setLoadingFlare(false);
+        return;
+      }
 
       if (data && data.length > 0) {
         const latestReading = data[data.length - 1];
@@ -1178,10 +1225,7 @@ export default function IntelligencePage() {
 
   const fetchSunspotData = async () => {
     try {
-      // Fetch solar indices data from NOAA which includes sunspot number
-      const response = await fetch(
-        "https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json"
-      );
+      const response = await fetch("/api/space-weather/sunspot");
 
       if (!response.ok) {
         console.warn('Sunspot API returned error:', response.status);
@@ -1191,8 +1235,15 @@ export default function IntelligencePage() {
 
       const data = await response.json();
 
+      // Check for error response
+      if (data.error) {
+        console.warn("Sunspot API error:", data.error);
+        setLoadingSunspot(false);
+        return;
+      }
+
       // Get the most recent entry (last in array)
-      if (data && data.length > 0) {
+      if (Array.isArray(data) && data.length > 0) {
         const latestData = data[data.length - 1];
         setSunspotNumber(latestData.ssn || 0);
         setSunspotLastUpdated(latestData["time-tag"] || null);
@@ -1207,9 +1258,7 @@ export default function IntelligencePage() {
 
   const fetchHemispherePower = async () => {
     try {
-      const response = await fetch(
-        "https://services.swpc.noaa.gov/text/aurora-nowcast-hemi-power.txt"
-      );
+      const response = await fetch("/api/space-weather/hemisphere-power");
 
       if (!response.ok) {
         console.warn('Hemisphere power API returned error:', response.status);
@@ -1217,26 +1266,22 @@ export default function IntelligencePage() {
         return;
       }
 
-      const text = await response.text();
-      const lines = text.split('\n').filter(line =>
-        line.trim() && !line.startsWith('#') && !line.startsWith(':')
-      );
+      const data = await response.json();
 
-      // Get the most recent data line (last non-empty, non-comment line)
-      if (lines.length > 0) {
-        const lastLine = lines[lines.length - 1];
-        const parts = lastLine.trim().split(/\s+/);
+      // Check for error response
+      if (data.error) {
+        console.warn("Hemisphere power API error:", data.error);
+        setLoadingHemispherePower(false);
+        return;
+      }
 
-        // Format: Observation_Time  Forecast_Time  North_GW  South_GW
-        if (parts.length >= 4) {
-          const north = parseInt(parts[2], 10);
-          const south = parseInt(parts[3], 10);
-          const timestamp = parts[0].replace('_', ' ');
-
-          if (!isNaN(north) && !isNaN(south)) {
-            setHemispherePower({ north, south, timestamp });
-          }
-        }
+      // Use parsed data from API route
+      if (data.northGW !== undefined && data.southGW !== undefined) {
+        setHemispherePower({
+          north: data.northGW,
+          south: data.southGW,
+          timestamp: data.observationTime?.replace('_', ' ') || ''
+        });
       }
 
       setLoadingHemispherePower(false);
@@ -4359,16 +4404,91 @@ export default function IntelligencePage() {
                           </div>
                         </div>
 
-                        {/* Aurora Characteristics - Only show when there's activity */}
-                        {verdict.intensityScore > 10 && verdict.auroraType && (
+                        {/* Aurora Characteristics - Location-Customized */}
+                        {verdict.intensityScore > 10 && (
                           <div className="bg-purple-500/10 rounded-lg p-3 mb-3 border border-purple-500/30">
-                            <div>
-                              <div className="text-xs text-gray-400 uppercase mb-2">Expected Aurora Characteristics</div>
-                                <div className="space-y-1 text-sm">
-                                  <div>
-                                    <span className="text-gray-400">Type:</span>
-                                    <span className="text-white ml-2">{verdict.auroraType}</span>
+                            {/* Location-specific prediction when user location is available */}
+                            {yourLocationCoords ? (() => {
+                              const locationPrediction = predictAuroraForLocation(
+                                yourLocationCoords.lat,
+                                yourLocationCoords.lon,
+                                kp,
+                                verdict.auroraType,
+                                verdict.auroraColors
+                              );
+                              return (
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-lg">📍</span>
+                                    <div className="text-xs text-gray-400 uppercase">Aurora from your location</div>
                                   </div>
+
+                                  {/* Summary */}
+                                  <div className="text-sm text-white/90 leading-relaxed">
+                                    {locationPrediction.summary}
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-3">
+                                    {/* Colors */}
+                                    <div className="bg-black/20 rounded-lg p-2">
+                                      <div className="text-xs text-gray-400 mb-1">Expected Colors</div>
+                                      <div className="text-sm font-semibold text-white">{locationPrediction.dominantColor}</div>
+                                      <div className="text-xs text-purple-300 mt-1">{locationPrediction.expectedColors.slice(0, 3).join(", ")}</div>
+                                    </div>
+
+                                    {/* Structure */}
+                                    <div className="bg-black/20 rounded-lg p-2">
+                                      <div className="text-xs text-gray-400 mb-1">Expected Form</div>
+                                      <div className="text-sm font-semibold text-white">{locationPrediction.expectedStructure}</div>
+                                    </div>
+
+                                    {/* Where to Look */}
+                                    <div className="bg-black/20 rounded-lg p-2">
+                                      <div className="text-xs text-gray-400 mb-1">Where to Look</div>
+                                      <div className="text-sm font-semibold text-white">{locationPrediction.viewingDirection}</div>
+                                      <div className="text-xs text-purple-300 mt-1">{locationPrediction.elevationAngle}</div>
+                                    </div>
+
+                                    {/* Brightness */}
+                                    <div className="bg-black/20 rounded-lg p-2">
+                                      <div className="text-xs text-gray-400 mb-1">Brightness</div>
+                                      <div className="text-sm font-semibold text-white capitalize">{locationPrediction.apparentBrightness.replace("_", " ")}</div>
+                                    </div>
+                                  </div>
+
+                                  {/* Color Explanation */}
+                                  <div className="text-xs text-gray-400 leading-relaxed">
+                                    💡 {locationPrediction.colorExplanation}
+                                  </div>
+
+                                  {/* Camera Settings */}
+                                  {locationPrediction.apparentBrightness !== "not_visible" && (
+                                    <div className="bg-black/30 rounded-lg p-2 mt-2">
+                                      <div className="text-xs text-gray-400 mb-1">📷 Camera Settings</div>
+                                      <div className="text-xs text-white/80 space-y-0.5">
+                                        <div>ISO: {locationPrediction.cameraSettings.iso} | Shutter: {locationPrediction.cameraSettings.shutter} | f/{locationPrediction.cameraSettings.aperture.replace("f/", "")}</div>
+                                        <div className="text-purple-300 italic mt-1">{locationPrediction.cameraSettings.tip}</div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Viewing Tip */}
+                                  <div className="text-xs text-aurora-green italic">
+                                    ✨ {locationPrediction.viewingTip}
+                                  </div>
+                                </div>
+                              );
+                            })() : (
+                              /* Fallback to generic aurora characteristics when no location */
+                              <div>
+                                <div className="text-xs text-gray-400 uppercase mb-2">Expected Aurora Characteristics</div>
+                                <div className="space-y-1 text-sm">
+                                  {verdict.auroraType && (
+                                    <div>
+                                      <span className="text-gray-400">Type:</span>
+                                      <span className="text-white ml-2">{verdict.auroraType}</span>
+                                    </div>
+                                  )}
                                   <div>
                                     <span className="text-gray-400">Duration:</span>
                                     <span className="text-white ml-2">{verdict.durationHours}h</span>
@@ -4386,7 +4506,11 @@ export default function IntelligencePage() {
                                     </div>
                                   )}
                                 </div>
-                            </div>
+                                <div className="mt-2 text-xs text-gray-500 italic">
+                                  📍 Set your location above for personalized aurora predictions
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
