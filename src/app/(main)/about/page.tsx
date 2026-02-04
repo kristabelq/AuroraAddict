@@ -467,28 +467,6 @@ export default function AboutPage() {
             </div>
           </div>
 
-          {/* Intensity Guide */}
-          <div className="bg-white/5 rounded-xl p-4 space-y-3">
-            <h4 className="font-semibold text-white">What to Expect by Kp Level</h4>
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <span className="text-green-400 font-mono text-sm w-12">Kp 3-4</span>
-                <span className="text-sm text-gray-300">Faint green glow on horizon, may need camera to see</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-yellow-400 font-mono text-sm w-12">Kp 5</span>
-                <span className="text-sm text-gray-300">Visible green arcs, some movement, good photography</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-orange-400 font-mono text-sm w-12">Kp 6-7</span>
-                <span className="text-sm text-gray-300">Bright dancing curtains, multiple colours, overhead at high latitudes</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-red-400 font-mono text-sm w-12">Kp 8-9</span>
-                <span className="text-sm text-gray-300">Spectacular storm! Corona possible, visible at mid-latitudes, all colours</span>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Version */}
