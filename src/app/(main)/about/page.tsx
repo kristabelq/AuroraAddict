@@ -390,10 +390,111 @@ export default function AboutPage() {
           </div>
         </div>
 
+        {/* Aurora Types & Colours */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">Aurora Types & Colours</h3>
+
+          {/* Aurora Colours */}
+          <div className="bg-white/5 rounded-xl p-4 space-y-3">
+            <h4 className="font-semibold text-white">Aurora Colours Explained</h4>
+            <p className="text-sm text-gray-400 mb-3">
+              Aurora colours depend on which atmospheric gas is excited and at what altitude.
+            </p>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-4 h-4 rounded-full bg-green-400 mt-0.5 flex-shrink-0"></div>
+                <div>
+                  <span className="text-green-400 font-medium">Green (557.7nm)</span>
+                  <p className="text-xs text-gray-400">Most common. Oxygen atoms at 100-300km altitude. Visible even in weak displays.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-4 h-4 rounded-full bg-red-500 mt-0.5 flex-shrink-0"></div>
+                <div>
+                  <span className="text-red-400 font-medium">Red (630.0nm)</span>
+                  <p className="text-xs text-gray-400">Oxygen at high altitude (200-400km). Seen during strong storms, often as red tops on green curtains.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-4 h-4 rounded-full bg-purple-500 mt-0.5 flex-shrink-0"></div>
+                <div>
+                  <span className="text-purple-400 font-medium">Purple/Blue (391-470nm)</span>
+                  <p className="text-xs text-gray-400">Nitrogen molecules at lower edge (80-100km). Often appears as purple fringes at the bottom of curtains.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-4 h-4 rounded-full bg-pink-400 mt-0.5 flex-shrink-0"></div>
+                <div>
+                  <span className="text-pink-400 font-medium">Pink/Magenta</span>
+                  <p className="text-xs text-gray-400">Mix of red oxygen and blue nitrogen emissions. Common during intense substorms.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Aurora Types */}
+          <div className="bg-white/5 rounded-xl p-4 space-y-3">
+            <h4 className="font-semibold text-white">Aurora Types</h4>
+            <div className="space-y-3">
+              <div className="border-l-2 border-green-500 pl-3">
+                <span className="text-white font-medium">Homogeneous Arc</span>
+                <p className="text-xs text-gray-400">Stable, uniform band stretching east-west. Often the first sign of aurora activity.</p>
+              </div>
+              <div className="border-l-2 border-green-400 pl-3">
+                <span className="text-white font-medium">Rayed Arc</span>
+                <p className="text-xs text-gray-400">Arc with vertical rays/striations. Indicates increasing activity.</p>
+              </div>
+              <div className="border-l-2 border-aurora-green pl-3">
+                <span className="text-white font-medium">Curtains/Draperies</span>
+                <p className="text-xs text-gray-400">Folded, flowing structures resembling curtains blowing in the wind. Classic aurora form.</p>
+              </div>
+              <div className="border-l-2 border-yellow-400 pl-3">
+                <span className="text-white font-medium">Corona</span>
+                <p className="text-xs text-gray-400">Rays appearing to converge overhead at the magnetic zenith. Spectacular during strong storms!</p>
+              </div>
+              <div className="border-l-2 border-purple-400 pl-3">
+                <span className="text-white font-medium">Pulsating Aurora</span>
+                <p className="text-xs text-gray-400">Patches that turn on/off every few seconds. Often seen during recovery phase.</p>
+              </div>
+              <div className="border-l-2 border-pink-400 pl-3">
+                <span className="text-white font-medium">STEVE (Strong Thermal Emission Velocity Enhancement)</span>
+                <p className="text-xs text-gray-400">Narrow purple/mauve ribbon, not technically aurora but often appears alongside it.</p>
+              </div>
+              <div className="border-l-2 border-blue-400 pl-3">
+                <span className="text-white font-medium">Diffuse Aurora</span>
+                <p className="text-xs text-gray-400">Faint, widespread glow without distinct structures. Often visible only to cameras.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Intensity Guide */}
+          <div className="bg-white/5 rounded-xl p-4 space-y-3">
+            <h4 className="font-semibold text-white">What to Expect by Kp Level</h4>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <span className="text-green-400 font-mono text-sm w-12">Kp 3-4</span>
+                <span className="text-sm text-gray-300">Faint green glow on horizon, may need camera to see</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-yellow-400 font-mono text-sm w-12">Kp 5</span>
+                <span className="text-sm text-gray-300">Visible green arcs, some movement, good photography</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-orange-400 font-mono text-sm w-12">Kp 6-7</span>
+                <span className="text-sm text-gray-300">Bright dancing curtains, multiple colours, overhead at high latitudes</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-red-400 font-mono text-sm w-12">Kp 8-9</span>
+                <span className="text-sm text-gray-300">Spectacular storm! Corona possible, visible at mid-latitudes, all colours</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Version */}
         <div className="text-center text-gray-500 text-sm">
-          <p>Version 1.1.0</p>
-          <p className="mt-1">♥ Made with love for aurora addicts everywhere ♥</p>
+          <p>Version 1.2.0</p>
+          <p className="mt-1">Made with love for aurora addicts everywhere</p>
         </div>
       </div>
     </div>
