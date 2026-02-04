@@ -64,6 +64,11 @@ export interface SubstormDetectionInput {
   currentBz: number; // IMF Bz in nT
   solarWindSpeed: number; // km/s
   previousState?: SubstormState;
+  // Enhanced inputs for better timing predictions
+  sustainedBzMinutes?: number; // How long Bz has been southward
+  bzTrend?: "strengthening" | "weakening" | "stable";
+  newellCoupling?: number; // Current Newell coupling value
+  hp30?: number; // Half-hourly Hp index (more responsive than Kp)
 }
 
 // Thresholds for substorm detection (based on scientific literature)
@@ -222,12 +227,57 @@ export function detectSubstormPhase(
     ? Math.round((now.getTime() - phaseStartTime.getTime()) / 60000)
     : 0;
 
-  // Estimate time to onset (only in growth phase)
+  // Enhanced time-to-onset estimation (only in growth phase)
+  // Uses multiple factors: energy loading rate, sustained Bz duration, Bz trend, and Newell coupling
   let estimatedTimeToOnset: number | null = null;
   if (phase === "growth" && energyLoadingRate > 0) {
+    // Base estimate from energy loading
     const remainingEnergy = 100 - energyLoadingLevel;
-    estimatedTimeToOnset = Math.round(remainingEnergy / energyLoadingRate);
+    let baseEstimate = remainingEnergy / energyLoadingRate;
+
+    // Factor 1: Sustained Bz duration - longer duration = faster onset
+    // Substorms typically require 30-60 min of sustained southward Bz
+    const sustainedBzMinutes = input.sustainedBzMinutes ?? 0;
+    let sustainedFactor = 1.0;
+    if (sustainedBzMinutes >= 45) {
+      sustainedFactor = 0.7; // Onset imminent, reduce estimate by 30%
+    } else if (sustainedBzMinutes >= 30) {
+      sustainedFactor = 0.85; // Well-loaded, reduce by 15%
+    } else if (sustainedBzMinutes >= 15) {
+      sustainedFactor = 0.95; // Building up
+    }
+
+    // Factor 2: Bz trend - strengthening = faster onset
+    const bzTrend = input.bzTrend ?? "stable";
+    let trendFactor = 1.0;
+    if (bzTrend === "strengthening") {
+      trendFactor = 0.8; // Accelerating energy input
+    } else if (bzTrend === "weakening") {
+      trendFactor = 1.3; // Decelerating, may not reach onset
+    }
+
+    // Factor 3: Newell coupling - higher = faster onset
+    // Typical thresholds: <3000 low, 3000-8000 moderate, 8000-15000 high, >15000 very high
+    const coupling = input.newellCoupling ?? 0;
+    let couplingFactor = 1.0;
+    if (coupling >= 15000) {
+      couplingFactor = 0.6; // Very high coupling, rapid loading
+    } else if (coupling >= 8000) {
+      couplingFactor = 0.75; // High coupling
+    } else if (coupling >= 3000) {
+      couplingFactor = 0.9; // Moderate coupling
+    } else if (coupling < 1000) {
+      couplingFactor = 1.5; // Low coupling, slower loading
+    }
+
+    // Combined estimate
+    estimatedTimeToOnset = Math.round(baseEstimate * sustainedFactor * trendFactor * couplingFactor);
     estimatedTimeToOnset = Math.max(5, Math.min(120, estimatedTimeToOnset));
+
+    // Late growth phase override: if energy > 80% and sustained > 30 min, onset is very soon
+    if (energyLoadingLevel >= 80 && sustainedBzMinutes >= 30) {
+      estimatedTimeToOnset = Math.min(estimatedTimeToOnset, 15);
+    }
   }
 
   // Calculate affected latitude range

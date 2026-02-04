@@ -13,8 +13,11 @@ export async function GET(request: Request) {
       );
     }
 
+    // Use environment variable for NASA API key, with fallback to DEMO_KEY for development
+    const nasaApiKey = process.env.NASA_DONKI_API_KEY || "DEMO_KEY";
+
     const response = await fetch(
-      `https://api.nasa.gov/DONKI/HSS?startDate=${startDate}&endDate=${endDate}&api_key=NIXvIqoTvk1qIplmptffaH4sQYgTnlDD6bH4kIYM`,
+      `https://api.nasa.gov/DONKI/HSS?startDate=${startDate}&endDate=${endDate}&api_key=${nasaApiKey}`,
       {
         headers: {
           "User-Agent": "AuroraAddict/1.0",

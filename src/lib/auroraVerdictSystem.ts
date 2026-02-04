@@ -137,14 +137,44 @@ export function calculateAuroraVerdict(
   density: number,
   enhanced?: EnhancedInputs
 ): AuroraVerdict {
-  // Use Hp30 if available and significantly different from Kp
-  // Hp30 is more responsive and catches activity changes faster
-  const effectiveKp = enhanced?.hp30 ?? kp;
-  const hp30Warning = enhanced?.hp30 && Math.abs(enhanced.hp30 - kp) >= 2
-    ? enhanced.hp30 > kp
-      ? "Hp30 is higher - activity may be increasing faster than Kp shows"
-      : "Hp30 is lower - activity may be decreasing"
-    : null;
+  // Enhanced Hp30 weighting based on substorm phase
+  // Hp30 is more responsive (30-min resolution) vs Kp (3-hour average)
+  // During growth/onset phases, Hp30 is more reliable for real-time activity
+  let effectiveKp: number;
+  let hp30Warning: string | null = null;
+
+  if (enhanced?.hp30 !== undefined) {
+    const isActivePhase = enhanced.substormPhase === "growth" ||
+                         enhanced.substormPhase === "onset" ||
+                         enhanced.substormPhase === "expansion";
+
+    if (isActivePhase) {
+      // During active phases, weight Hp30 1.5x more than Kp
+      // This better reflects real-time conditions when activity is changing rapidly
+      const hp30Weight = 1.5;
+      const kpWeight = 1.0;
+      effectiveKp = (enhanced.hp30 * hp30Weight + kp * kpWeight) / (hp30Weight + kpWeight);
+
+      // Generate alert for Hp30 surge (indicator of rapid activity increase)
+      if (enhanced.hp30 > kp + 2) {
+        hp30Warning = `⚠️ Hp30 SURGE: ${enhanced.hp30.toFixed(1)} vs Kp ${kp.toFixed(1)} - Activity is increasing rapidly! Kp will catch up soon.`;
+      } else if (enhanced.hp30 > kp + 1) {
+        hp30Warning = `Hp30 is rising faster than Kp (${enhanced.hp30.toFixed(1)} vs ${kp.toFixed(1)}) - conditions improving`;
+      }
+    } else {
+      // During quiet/recovery, use Hp30 directly if available
+      effectiveKp = enhanced.hp30;
+
+      // Standard difference warning
+      if (Math.abs(enhanced.hp30 - kp) >= 2) {
+        hp30Warning = enhanced.hp30 > kp
+          ? `Hp30 is higher (${enhanced.hp30.toFixed(1)}) - activity may be increasing faster than Kp shows`
+          : `Hp30 is lower (${enhanced.hp30.toFixed(1)}) - activity may be decreasing`;
+      }
+    }
+  } else {
+    effectiveKp = kp;
+  }
 
   // Calculate Newell coupling function for additional insight
   let newellCoupling: NewellCouplingResult | undefined;

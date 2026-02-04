@@ -10,6 +10,7 @@ import { auroraLocations, calculateDistance } from "@/lib/auroraLocations";
 import { calculateAuroraVerdict, getVerdictColor, type AuroraVerdict } from "@/lib/auroraVerdictSystem";
 import { calculateLocationAlert, type LocationAlert, type AlertLevel } from "@/lib/alerts/locationAlerts";
 import { predictAuroraForLocation, type LocationAuroraPrediction } from "@/lib/locationAuroraPrediction";
+import { RealTimeStatusCard } from "@/components/intelligence/RealTimeStatusCard";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 
 interface FlareChartDataPoint {
@@ -44,6 +45,7 @@ export default function IntelligencePage() {
 
   // Aurora Forecast states
   const [currentKp, setCurrentKp] = useState<string>("0.00");
+  const [kpForecast, setKpForecast] = useState<Array<{ time: string; kp: number; type: 'observed' | 'estimated' }>>([]);
   const [loadingKp, setLoadingKp] = useState(true);
   const [moonPhase, setMoonPhase] = useState<{
     phase: string;
@@ -54,6 +56,7 @@ export default function IntelligencePage() {
   const [loadingBz, setLoadingBz] = useState(true);
   const [bzLastUpdated, setBzLastUpdated] = useState<string | null>(null);
   const [currentBt, setCurrentBt] = useState<number | null>(null);
+  const [currentBy, setCurrentBy] = useState<number | null>(null);
   const [solarWindSpeed, setSolarWindSpeed] = useState<number | null>(null);
   const [solarWindDensity, setSolarWindDensity] = useState<number | null>(null);
   const [solarWindLastUpdated, setSolarWindLastUpdated] = useState<string | null>(null);
@@ -597,6 +600,23 @@ export default function IntelligencePage() {
       if (latestObserved) {
         setCurrentKp(latestObserved[1]);
       }
+
+      // Build forecast array for bar chart - last 7 entries (recent + upcoming)
+      const forecastData: Array<{ time: string; kp: number; type: 'observed' | 'estimated' }> = [];
+
+      // Take the last 7 entries from the data
+      const recentData = formattedData.slice(-7);
+
+      for (const row of recentData) {
+        if (!Array.isArray(row) || row.length < 3) continue;
+        forecastData.push({
+          time: row[0],
+          kp: parseFloat(row[1]),
+          type: row[2] as 'observed' | 'estimated'
+        });
+      }
+
+      setKpForecast(forecastData);
       setLoadingKp(false);
     } catch (error) {
       console.error("Error fetching KP data:", error);
@@ -622,11 +642,15 @@ export default function IntelligencePage() {
       if (data.length > 1) {
         const latestReading = data[data.length - 1];
         const bzValue = parseFloat(latestReading[3]);
+        const byValue = parseFloat(latestReading[2]); // By is in column 2 (by_gsm)
         const btValue = parseFloat(latestReading[6]); // Bt is in column 6
         const timestamp = latestReading[0]; // Timestamp from API
 
         if (!isNaN(bzValue)) {
           setCurrentBz(bzValue);
+        }
+        if (!isNaN(byValue)) {
+          setCurrentBy(byValue);
         }
         if (!isNaN(btValue)) {
           setCurrentBt(btValue);
@@ -770,7 +794,7 @@ export default function IntelligencePage() {
       };
 
       const response = await fetch(
-        `https://api.nasa.gov/DONKI/CME?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&api_key=NIXvIqoTvk1qIplmptffaH4sQYgTnlDD6bH4kIYM`
+        `https://api.nasa.gov/DONKI/CME?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&api_key=DEMO_KEY`
       );
 
       if (!response.ok) {
@@ -956,7 +980,7 @@ export default function IntelligencePage() {
       };
 
       const response = await fetch(
-        `https://api.nasa.gov/DONKI/HSS?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&api_key=NIXvIqoTvk1qIplmptffaH4sQYgTnlDD6bH4kIYM`
+        `https://api.nasa.gov/DONKI/HSS?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&api_key=DEMO_KEY`
       );
 
       if (response.ok) {
@@ -4514,78 +4538,154 @@ export default function IntelligencePage() {
                           </div>
                         )}
 
-                        {/* Physics Validation */}
-                        {verdict.physicsFlag !== "✅ PHYSICALLY VALID" && (
-                          <div className={`rounded-lg p-3 mb-3 border ${
-                            verdict.physicsFlag.includes("IMPOSSIBLE") ? "bg-red-500/10 border-red-500/30" :
-                            verdict.physicsFlag.includes("UNLIKELY") ? "bg-orange-500/10 border-orange-500/30" :
-                            "bg-yellow-500/10 border-yellow-500/30"
-                          }`}>
-                            <div className="flex items-start gap-2">
-                              <span className="text-lg">{verdict.physicsFlag.split(" ")[0]}</span>
-                              <div className="flex-1">
-                                <div className="text-xs font-bold text-white uppercase mb-1">
-                                  {verdict.physicsFlag.substring(2)}
+                        {/* What's Coming - 30-60 min Forecast */}
+                        <div className="space-y-2 mb-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-400">What&apos;s Coming</span>
+                            <span className="text-xs text-gray-500">in ~{speed > 0 ? Math.round(1500000 / speed / 60) : '--'} min</span>
+                          </div>
+                          {(() => {
+                              // === COMPREHENSIVE AURORA FORECAST ENGINE ===
+                              const transitMin = speed > 0 ? Math.round(1500000 / speed / 60) : 45;
+                              const arrivalTime = new Date(Date.now() + transitMin * 60 * 1000);
+                              const timeStr = arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                              const weakAuroraNow = verdict.intensityScore > 10;
+                              const hasAuroraNow = verdict.intensityScore > 25;
+                              const strongAuroraNow = verdict.intensityScore > 50;
+                              const l1Bz = currentBz || 0;
+                              const trend = bzHistory?.bzTrend || 'stable';
+                              const phase = energyState.substormPhase;
+                              const loading = energyState.loadingLevel;
+                              const sustained15 = bzHistory?.isSustained15 || false;
+                              const minutesSouth = bzHistory?.minutesSouth || 0;
+                              const highSpeed = speed > 500;
+                              const veryHighSpeed = speed > 600;
+
+                              // 1. SUBSTORM EXPANSION + Strong = PEAK
+                              if (phase === 'expansion' && strongAuroraNow) {
+                                return (
+                                  <div className="bg-gradient-to-r from-green-500/30 to-emerald-500/30 border border-green-400/60 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-green-300 mb-1">🌟 PEAK ACTIVITY NOW</div>
+                                    <p className="text-xs text-green-200">
+                                      Substorm expansion — maximum brightness!
+                                      <span className="block mt-1 font-semibold">→ GO OUT NOW!</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              // 2. GROWTH + Energy loading = IMMINENT
+                              if (phase === 'growth' && loading > 50 && sustained15) {
+                                return (
+                                  <div className="bg-gradient-to-r from-yellow-500/30 to-orange-500/30 border border-yellow-400/60 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-yellow-300 mb-1">⚡ SUBSTORM BUILDING</div>
+                                    <p className="text-xs text-yellow-200">
+                                      Energy {loading.toFixed(0)}% — onset in ~{energyState.timeToOnset || 20} min.
+                                      <span className="block mt-1 font-semibold">→ Get ready NOW!</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              // 3. Strong southward at L1 = INCOMING
+                              if (l1Bz <= -5 && !hasAuroraNow && trend !== 'weakening') {
+                                return (
+                                  <div className="bg-gradient-to-r from-blue-500/30 to-cyan-500/30 border border-blue-400/60 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-blue-300 mb-1">🔵 AURORA INCOMING</div>
+                                    <p className="text-xs text-blue-200">
+                                      Strong Bz ({l1Bz.toFixed(1)} nT) heading to Earth.
+                                      <span className="block mt-1 font-semibold">→ Be ready by {timeStr}</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              // 4. Moderate southward = IMPROVING
+                              if (l1Bz <= -3 && l1Bz > -5 && trend !== 'weakening') {
+                                return (
+                                  <div className="bg-green-500/15 border border-green-500/40 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-green-300 mb-1">🟢 Conditions improving</div>
+                                    <p className="text-xs text-green-200">
+                                      Southward Bz ({l1Bz.toFixed(1)} nT) — favorable.
+                                      <span className="block mt-1 font-semibold">→ Check again at {timeStr}</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              // 5. RECOVERY
+                              if (phase === 'recovery' && hasAuroraNow) {
+                                return (
+                                  <div className="bg-purple-500/20 border border-purple-400/50 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-purple-300 mb-1">🟣 Recovery phase</div>
+                                    <p className="text-xs text-purple-200">
+                                      Substorm winding down.
+                                      <span className="block mt-1 font-semibold">→ Worth watching ~30-60 min</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              // 6. WINDOW CLOSING
+                              if (hasAuroraNow && l1Bz >= -1 && (trend === 'weakening' || l1Bz >= 0)) {
+                                return (
+                                  <div className="bg-gradient-to-r from-orange-500/30 to-red-500/30 border border-orange-400/60 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-orange-300 mb-1">🟠 WINDOW CLOSING</div>
+                                    <p className="text-xs text-orange-200">
+                                      Aurora now but L1 turning north.
+                                      <span className="block mt-1 font-semibold">→ GO OUT NOW!</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              // 7. UNSTABLE
+                              if (l1Bz > -3 && l1Bz < 1 && trend === 'stable') {
+                                return (
+                                  <div className="bg-gray-500/20 border border-gray-400/40 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-gray-300 mb-1">⚪ Unstable</div>
+                                    <p className="text-xs text-gray-300">
+                                      Bz near zero — could swing either way.
+                                      <span className="block mt-1 font-semibold">→ Monitor closely</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              // 8. FADING
+                              if (l1Bz >= 0 && weakAuroraNow && !hasAuroraNow) {
+                                return (
+                                  <div className="bg-orange-500/15 border border-orange-500/30 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-orange-300 mb-1">🟠 Activity fading</div>
+                                    <p className="text-xs text-orange-200">
+                                      Weak aurora but Bz now north.
+                                      <span className="block mt-1 font-semibold">→ Not worth going out</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              // 9. QUIET
+                              if (l1Bz >= 1 && phase === 'quiet' && !weakAuroraNow) {
+                                return (
+                                  <div className="bg-red-500/15 border border-red-500/30 rounded-lg p-3">
+                                    <div className="text-sm font-bold text-red-300 mb-1">🔴 Quiet — no aurora expected</div>
+                                    <p className="text-xs text-red-200">
+                                      Northward Bz blocks aurora.
+                                      <span className="block mt-1 font-semibold">→ Check back in 1-2 hours</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              // 10. DEFAULT
+                              return (
+                                <div className="bg-gray-500/15 border border-gray-500/30 rounded-lg p-3">
+                                  <div className="text-sm font-bold text-gray-300 mb-1">⚪ Monitoring</div>
+                                  <p className="text-xs text-gray-300">
+                                    Bz: {l1Bz.toFixed(1)} nT | Phase: {phase}
+                                    <span className="block mt-1 font-semibold">→ Continue monitoring</span>
+                                  </p>
                                 </div>
-                                <div className="text-xs text-white/80">{verdict.physicsNotes}</div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                              );
+                            })()}
+                        </div>
 
-                        {/* Encouragement tip - REMOVED FOR NOW, LOGIC KEPT FOR LATER */}
-                        {/* {encouragementTip && (
-                          <div className="text-xs text-gray-400 italic mb-4 text-center">
-                            {encouragementTip}
-                          </div>
-                        )} */}
-
-                        {/* Data metrics below */}
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-400">KP Index</span>
-                            <span className="text-sm font-bold" style={{ color: getKpColor(kp) }}>{kp.toFixed(1)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-400">Bz Component</span>
-                            <span className="text-sm font-bold" style={{ color: getBzColor(bz) }}>{bz.toFixed(1)} nT</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-400">Bt (Total Field)</span>
-                            <span className="text-sm font-bold" style={{ color: getBtColor(currentBt || 0) }}>{currentBt?.toFixed(1) || "0.0"} nT</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-400">Wind Speed</span>
-                            <span className="text-sm font-bold" style={{ color: getWindSpeedColor(speed) }}>{speed.toFixed(0)} km/s</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-400">Density</span>
-                            <span className="text-sm font-bold" style={{ color: getDensityColor(density) }}>{density.toFixed(1)} p/cm³</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-400">Hemisphere Power</span>
-                            {hemispherePower ? (
-                              <span className="text-sm font-bold" style={{ color: getHemispherePowerColor(hemispherePower.north) }}>
-                                {hemispherePower.north} GW
-                              </span>
-                            ) : (
-                              <span className="text-xs text-gray-500">Loading...</span>
-                            )}
-                          </div>
-
-                          {/* Kp Lag Warning */}
-                          {kpLagWarning && kpLagWarning.isLagging && (
-                            <div className="pt-2 border-t border-white/10">
-                              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                                <p className="text-xs text-yellow-200 leading-relaxed">
-                                  {kpLagWarning.message}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
+                        {/* Bz History Section */}
+                        <div className="mt-3 space-y-2">
                           {/* Bz History Chart */}
-                          <div className="pt-2 border-t border-white/10 space-y-2">
+                          <div className="space-y-2">
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-gray-400">Bz History (90min)</span>
                               {bzHistory && (
@@ -4604,13 +4704,13 @@ export default function IntelligencePage() {
                                 <div className="absolute left-1 bottom-1 text-[10px] text-green-400/60">−South ({bzHistory.minBz.toFixed(1)})</div>
                                 {/* Dots */}
                                 <svg className="w-full h-full" preserveAspectRatio="none">
-                                  {bzHistory.readings.map((bz, i) => {
+                                  {bzHistory.readings.map((bzVal, i) => {
                                     const x = (i / (bzHistory.readings.length - 1)) * 100;
                                     // Scale: -20 to +20 nT range, clamped
-                                    const clampedBz = Math.max(-20, Math.min(20, bz));
+                                    const clampedBz = Math.max(-20, Math.min(20, bzVal));
                                     // y: 50% is center, negative goes down (good), positive goes up (bad)
                                     const y = 50 - (clampedBz / 20) * 45;
-                                    const color = bz >= 0 ? '#ef4444' : bz > -4 ? '#eab308' : '#22c55e';
+                                    const color = bzVal >= 0 ? '#ef4444' : bzVal > -4 ? '#eab308' : '#22c55e';
                                     return (
                                       <circle
                                         key={i}
@@ -4647,240 +4747,106 @@ export default function IntelligencePage() {
                               <span className="text-xs text-gray-500">Loading...</span>
                             )}
                           </div>
+                        </div>
 
-                          {/* Substorm Phase & Energy Loading */}
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-400">Substorm Phase</span>
-                              <div className="flex items-center gap-2">
-                                {!loadingGoesData ? (
-                                  <>
-                                    <span className={`text-sm font-bold uppercase ${
-                                      energyState.substormPhase === 'expansion' ? 'text-red-400' :
-                                      energyState.substormPhase === 'growth' ? 'text-yellow-400' :
-                                      energyState.substormPhase === 'recovery' ? 'text-blue-400' :
-                                      'text-gray-400'
-                                    }`}>
-                                      {energyState.substormPhase}
-                                    </span>
-                                    <span className="text-base">
-                                      {energyState.substormPhase === 'expansion' ? '💥' :
-                                       energyState.substormPhase === 'growth' ? '🌀' :
-                                       energyState.substormPhase === 'recovery' ? '📉' : '😴'}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-gray-500">Loading...</span>
-                                )}
+                        {/* Physics Validation */}
+                        {verdict.physicsFlag !== "✅ PHYSICALLY VALID" && (
+                          <div className={`rounded-lg p-3 mb-3 border ${
+                            verdict.physicsFlag.includes("IMPOSSIBLE") ? "bg-red-500/10 border-red-500/30" :
+                            verdict.physicsFlag.includes("UNLIKELY") ? "bg-orange-500/10 border-orange-500/30" :
+                            "bg-yellow-500/10 border-yellow-500/30"
+                          }`}>
+                            <div className="flex items-start gap-2">
+                              <span className="text-lg">{verdict.physicsFlag.split(" ")[0]}</span>
+                              <div className="flex-1">
+                                <div className="text-xs font-bold text-white uppercase mb-1">
+                                  {verdict.physicsFlag.substring(2)}
+                                </div>
+                                <div className="text-xs text-white/80">{verdict.physicsNotes}</div>
                               </div>
                             </div>
-                            {!loadingGoesData && energyState.substormPhase !== 'quiet' && (
-                              <div className="text-xs space-y-1">
-                                <div className="flex justify-between items-center text-gray-400">
-                                  <span>Energy Loading</span>
-                                  <span className="font-bold text-white">{energyState.loadingLevel.toFixed(0)}%</span>
-                                </div>
-                                {energyState.timeToOnset !== null && energyState.timeToOnset > 0 && (
-                                  <div className="flex justify-between items-center text-gray-400">
-                                    <span>Time to Onset</span>
-                                    <span className="font-bold text-yellow-300">~{energyState.timeToOnset} min</span>
-                                  </div>
-                                )}
-                                <div className="flex justify-between items-center text-gray-400">
-                                  <span>Confidence</span>
-                                  <span className={`font-bold ${
-                                    energyState.confidence === 'high' ? 'text-green-400' :
-                                    energyState.confidence === 'medium' ? 'text-yellow-400' :
-                                    'text-gray-300'
-                                  }`}>
-                                    {energyState.confidence.toUpperCase()}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
+                          </div>
+                        )}
+
+                        {/* Encouragement tip - REMOVED FOR NOW, LOGIC KEPT FOR LATER */}
+                        {/* {encouragementTip && (
+                          <div className="text-xs text-gray-400 italic mb-4 text-center">
+                            {encouragementTip}
+                          </div>
+                        )} */}
+
+                        {/* Real-Time Status - Primary indicator (replaces Kp as headline) */}
+                        <RealTimeStatusCard
+                          bz={bz}
+                          by={currentBy || 0}
+                          bt={currentBt || 0}
+                          speed={speed}
+                          density={density}
+                          hemispherePower={hemispherePower?.north ?? null}
+                          substormPhase={energyState.substormPhase}
+                          substormConfidence={energyState.confidence === 'high' ? 0.9 : energyState.confidence === 'medium' ? 0.6 : 0.3}
+                          energyLoadingLevel={energyState.loadingLevel}
+                          energyLoadingRate={energyState.loadingRate}
+                          timeToOnset={energyState.timeToOnset}
+                          expectedPeakTime={energyState.phaseStartTime ? new Date(energyState.phaseStartTime.getTime() + 30 * 60000) : null}
+                          expectedRecoveryStart={energyState.phaseStartTime ? new Date(energyState.phaseStartTime.getTime() + 60 * 60000) : null}
+                          isLoading={loadingGoesData}
+                          className="mt-2 mb-3"
+                        />
+
+                        {/* Kp Forecast Bar Chart */}
+                        <div className="bg-black/20 rounded-lg p-3 border border-white/5">
+                          <div className="flex justify-between items-center mb-3">
+                            <span className="text-sm font-bold text-gray-300">Kp Index - Upcoming hours</span>
+                            <span className="text-sm font-bold" style={{ color: getKpColor(kp) }}>Now: {kp.toFixed(1)}</span>
                           </div>
 
-                          {/* What's Coming - 30-60 min Forecast */}
-                          <div className="pt-2 border-t border-white/10 space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-400">What&apos;s Coming</span>
-                              <span className="text-xs text-gray-500">in ~{speed > 0 ? Math.round(1500000 / speed / 60) : '--'} min</span>
-                            </div>
-                            {(() => {
-                              // === COMPREHENSIVE AURORA FORECAST ENGINE ===
-                              // Uses: L1 Bz (30-60 min ahead), Bz trend, substorm phase,
-                              // energy loading, solar wind speed/density, current intensity
+                          {/* Bar Chart */}
+                          <div className="flex items-end gap-2" style={{ height: '80px' }}>
+                            {kpForecast.length > 0 ? kpForecast.map((entry, i) => {
+                              const maxHeight = 65;
+                              const barHeight = Math.max(20, (entry.kp / 9) * maxHeight);
+                              const entryTime = new Date(entry.time);
+                              const hour = entryTime.getHours();
+                              const isAM = hour < 12;
+                              const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                              const timeLabel = `${displayHour} ${isAM ? 'AM' : 'PM'}`;
 
-                              const transitMin = speed > 0 ? Math.round(1500000 / speed / 60) : 45;
-                              const arrivalTime = new Date(Date.now() + transitMin * 60 * 1000);
-                              const timeStr = arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-                              // Current state analysis
-                              const hasAuroraNow = verdict.intensityScore > 25;
-                              const strongAuroraNow = verdict.intensityScore > 50;
-                              const l1Bz = currentBz || 0;
-                              const trend = bzHistory?.bzTrend || 'stable';
-                              const phase = energyState.substormPhase;
-                              const loading = energyState.loadingLevel;
-                              const sustained15 = bzHistory?.isSustained15 || false;
-                              const sustained45 = bzHistory?.isSustained45 || false;
-                              const minutesSouth = bzHistory?.minutesSouth || 0;
-                              const highSpeed = speed > 500;
-                              const veryHighSpeed = speed > 600;
-
-                              // === SCENARIO DETECTION (Priority Order) ===
-
-                              // 1. SUBSTORM EXPANSION + Strong conditions = PEAK ACTIVITY
-                              if (phase === 'expansion' && strongAuroraNow) {
-                                const windowLeft = l1Bz >= -2 ? '~30-45 min' : '1-2+ hours';
-                                return (
-                                  <div className="bg-gradient-to-r from-green-500/30 to-emerald-500/30 border border-green-400/60 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-green-300 mb-1">🌟 PEAK ACTIVITY NOW</div>
-                                    <p className="text-xs text-green-200">
-                                      Substorm expansion phase — maximum brightness!
-                                      {l1Bz >= 0 && <span className="block text-yellow-300">⚠️ L1 turning north — window: {windowLeft}</span>}
-                                      {l1Bz < -5 && <span className="block">Strong Bz at L1 — extended viewing likely</span>}
-                                      <span className="block mt-1 font-semibold">→ GO OUT NOW — this is the best time!</span>
-                                    </p>
-                                  </div>
-                                );
-                              }
-
-                              // 2. GROWTH PHASE + Energy loading = SUBSTORM IMMINENT
-                              if (phase === 'growth' && loading > 50 && sustained15) {
-                                const onsetTime = energyState.timeToOnset || 20;
-                                return (
-                                  <div className="bg-gradient-to-r from-yellow-500/30 to-orange-500/30 border border-yellow-400/60 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-yellow-300 mb-1">⚡ SUBSTORM BUILDING</div>
-                                    <p className="text-xs text-yellow-200">
-                                      Energy loading {loading.toFixed(0)}% — substorm onset likely in ~{onsetTime} min.
-                                      {trend === 'strengthening' && <span className="block text-green-300">Bz strengthening — explosive onset possible!</span>}
-                                      <span className="block mt-1 font-semibold">→ Get ready NOW — sudden brightening expected!</span>
-                                    </p>
-                                  </div>
-                                );
-                              }
-
-                              // 3. Strong southward Bz at L1 but quiet at Earth = AURORA COMING
-                              if (l1Bz <= -5 && !hasAuroraNow && trend !== 'weakening') {
-                                return (
-                                  <div className="bg-gradient-to-r from-blue-500/30 to-cyan-500/30 border border-blue-400/60 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-blue-300 mb-1">🔵 AURORA INCOMING</div>
-                                    <p className="text-xs text-blue-200">
-                                      Strong southward Bz ({l1Bz.toFixed(1)} nT) at L1 heading to Earth.
-                                      {highSpeed && <span className="block text-cyan-300">Fast solar wind ({speed.toFixed(0)} km/s) — arrival in ~{transitMin} min</span>}
-                                      {!highSpeed && <span className="block">Expected arrival: ~{timeStr}</span>}
-                                      <span className="block mt-1 font-semibold">→ Be ready by {timeStr} — conditions improving!</span>
-                                    </p>
-                                  </div>
-                                );
-                              }
-
-                              // 4. Moderate southward Bz at L1 = GRADUAL IMPROVEMENT
-                              if (l1Bz <= -3 && l1Bz > -5 && trend !== 'weakening') {
-                                return (
-                                  <div className="bg-green-500/15 border border-green-500/40 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-green-300 mb-1">🟢 Conditions improving</div>
-                                    <p className="text-xs text-green-200">
-                                      Southward Bz ({l1Bz.toFixed(1)} nT) — favorable for aurora.
-                                      {sustained15 && <span className="block">Sustained {minutesSouth}min — energy building</span>}
-                                      <span className="block mt-1 font-semibold">→ Check again at {timeStr}</span>
-                                    </p>
-                                  </div>
-                                );
-                              }
-
-                              // 5. RECOVERY PHASE = Activity winding down
-                              if (phase === 'recovery' && hasAuroraNow) {
-                                const secondaryChance = l1Bz < -3 ? 'Secondary peak possible!' : 'Fading gradually.';
-                                return (
-                                  <div className="bg-purple-500/20 border border-purple-400/50 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-purple-300 mb-1">🟣 Recovery phase</div>
-                                    <p className="text-xs text-purple-200">
-                                      Substorm winding down — {secondaryChance}
-                                      {l1Bz < -3 && <span className="block text-green-300">Bz still south at L1 — may reignite!</span>}
-                                      {l1Bz >= 0 && <span className="block text-yellow-300">L1 turning north — this may be the end</span>}
-                                      <span className="block mt-1 font-semibold">→ Still worth watching for ~30-60 min</span>
-                                    </p>
-                                  </div>
-                                );
-                              }
-
-                              // 6. Aurora NOW but L1 turning north = WINDOW CLOSING
-                              if (hasAuroraNow && l1Bz >= -1 && (trend === 'weakening' || l1Bz >= 0)) {
-                                return (
-                                  <div className="bg-gradient-to-r from-orange-500/30 to-red-500/30 border border-orange-400/60 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-orange-300 mb-1">🟠 WINDOW CLOSING</div>
-                                    <p className="text-xs text-orange-200">
-                                      Aurora visible now but L1 shows Bz turning north.
-                                      <span className="block">Current window: ~{transitMin}-{transitMin + 20} min remaining</span>
-                                      <span className="block mt-1 font-semibold">→ GO OUT NOW — don't miss this window!</span>
-                                    </p>
-                                  </div>
-                                );
-                              }
-
-                              // 7. Bz oscillating near zero = UNSTABLE
-                              if (l1Bz > -3 && l1Bz < 1 && trend === 'stable') {
-                                return (
-                                  <div className="bg-gray-500/20 border border-gray-400/40 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-gray-300 mb-1">⚪ Unstable conditions</div>
-                                    <p className="text-xs text-gray-300">
-                                      Bz near zero ({l1Bz.toFixed(1)} nT) — could swing either way.
-                                      {highSpeed && <span className="block text-cyan-300">High speed wind — watch for sudden changes</span>}
-                                      <span className="block mt-1 font-semibold">→ Monitor closely — conditions may change rapidly</span>
-                                    </p>
-                                  </div>
-                                );
-                              }
-
-                              // 8. Positive Bz, quiet phase = NOT FAVORABLE
-                              if (l1Bz >= 1 && phase === 'quiet' && !hasAuroraNow) {
-                                return (
-                                  <div className="bg-red-500/15 border border-red-500/30 rounded-lg p-3">
-                                    <div className="text-sm font-bold text-red-300 mb-1">🔴 Quiet — no aurora expected</div>
-                                    <p className="text-xs text-red-200">
-                                      Northward Bz (+{l1Bz.toFixed(1)} nT) blocks aurora formation.
-                                      {veryHighSpeed && <span className="block text-yellow-300">High speed stream — watch for Bz fluctuations</span>}
-                                      <span className="block mt-1 font-semibold">→ Check back in 1-2 hours or monitor CME alerts</span>
-                                    </p>
-                                  </div>
-                                );
-                              }
-
-                              // 9. Default fallback
                               return (
-                                <div className="bg-gray-500/15 border border-gray-500/30 rounded-lg p-3">
-                                  <div className="text-sm font-bold text-gray-300 mb-1">⚪ Monitoring conditions</div>
-                                  <p className="text-xs text-gray-300">
-                                    Bz: {l1Bz.toFixed(1)} nT | Phase: {phase} | Loading: {loading.toFixed(0)}%
-                                    <span className="block mt-1 font-semibold">→ Continue monitoring for changes</span>
-                                  </p>
+                                <div key={i} className="flex-1 flex flex-col items-center">
+                                  {/* Kp value label */}
+                                  <span className="text-[10px] font-medium text-gray-300 mb-1">
+                                    {entry.kp.toFixed(2)}
+                                  </span>
+                                  {/* Bar */}
+                                  <div
+                                    className="w-full rounded-t"
+                                    style={{
+                                      height: `${barHeight}px`,
+                                      backgroundColor: getKpColor(entry.kp),
+                                      opacity: entry.type === 'estimated' ? 0.85 : 1
+                                    }}
+                                  />
+                                  {/* Time label */}
+                                  <span className="text-[9px] text-gray-500 mt-1">{timeLabel}</span>
                                 </div>
                               );
-                            })()}
-                          </div>
-
-                          {/* Viewing Tip */}
-                          <div className="bg-black/30 rounded-lg p-3 border border-white/10">
-                            <div className="flex items-start gap-2">
-                              <span className="text-lg">💡</span>
-                              <div className="flex-1">
-                                <div className="text-xs text-gray-400 uppercase mb-1">Viewing Tip</div>
-                                <div className="text-sm text-white font-medium">{verdict.viewingTip}</div>
-                                {/* Show explanation for why conditions aren't favorable */}
-                                {verdict.viewingTip.toLowerCase().includes("not favorable") && (() => {
-                                  const explanation = getUnfavorableExplanation(kp, bz, speed, density);
-                                  return explanation ? (
-                                    <div className="text-xs text-gray-400 mt-2 italic">
-                                      {explanation}
-                                    </div>
-                                  ) : null;
-                                })()}
-                              </div>
-                            </div>
+                            }) : (
+                              <div className="flex-1 flex items-center justify-center text-gray-500 text-xs">Loading...</div>
+                            )}
                           </div>
                         </div>
+
+                        {/* Kp Lag Warning */}
+                        {kpLagWarning && kpLagWarning.isLagging && (
+                          <div className="mt-2">
+                            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                              <p className="text-xs text-yellow-200 leading-relaxed">
+                                {kpLagWarning.message}
+                              </p>
+                            </div>
+                          </div>
+                        )}
 
                       </>
                     );
