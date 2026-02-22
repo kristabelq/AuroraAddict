@@ -1,8 +1,10 @@
 import { createClient } from './client'
+import { compressForSighting, compressForProfile, formatFileSize } from '@/lib/imageCompression'
 
 /**
  * Upload image directly to Supabase Storage from the client
  * This bypasses Vercel's API route body size limits
+ * Automatically compresses images based on bucket type
  */
 export async function uploadImageToSupabase(
   file: File,
@@ -12,16 +14,35 @@ export async function uploadImageToSupabase(
   const supabase = createClient()
 
   try {
+    // Compress image based on bucket type
+    let processedFile = file
+    const originalSize = file.size
+
+    if (bucket === 'profiles') {
+      // Profiles: max 2MB
+      processedFile = await compressForProfile(file)
+    } else {
+      // Sightings and Hunts: max 5MB
+      processedFile = await compressForSighting(file)
+    }
+
+    // Log compression results
+    if (processedFile.size < originalSize) {
+      console.log(
+        `Compressed ${file.name}: ${formatFileSize(originalSize)} → ${formatFileSize(processedFile.size)} ` +
+        `(${Math.round((1 - processedFile.size / originalSize) * 100)}% reduction)`
+      )
+    }
+
     // Generate unique filename
     const timestamp = Date.now()
     const randomStr = Math.random().toString(36).substring(7)
-    const fileExt = file.name.split('.').pop() || 'jpg'
-    const path = `${userId}/${timestamp}-${randomStr}.${fileExt}`
+    const path = `${userId}/${timestamp}-${randomStr}.jpg`
 
     // Upload file
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(path, file, {
+      .upload(path, processedFile, {
         cacheControl: '3600',
         upsert: false,
       })
