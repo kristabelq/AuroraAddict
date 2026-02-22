@@ -31,6 +31,7 @@ export default function CMEAlertsPage() {
   const router = useRouter();
   const [cmeList, setCmeList] = useState<CMEData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export default function CMEAlertsPage() {
 
   const fetchCMEData = async () => {
     try {
+      setError(null);
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 7);
@@ -54,15 +56,17 @@ export default function CMEAlertsPage() {
         `https://api.nasa.gov/DONKI/CME?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&api_key=DEMO_KEY`
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        setCmeList(data || []);
+      if (!response.ok) {
+        throw new Error(`NASA DONKI API error: ${response.status} ${response.statusText}`);
       }
 
+      const data = await response.json();
+      setCmeList(data || []);
       setLastUpdate(new Date());
       setLoading(false);
     } catch (error) {
       console.error("Error fetching CME data:", error);
+      setError(error instanceof Error ? error.message : "Failed to load CME data");
       setLoading(false);
     }
   };
@@ -243,6 +247,29 @@ export default function CMEAlertsPage() {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-xl text-white">Loading CME data...</div>
+          </div>
+        ) : error ? (
+          <div className="bg-red-500/10 backdrop-blur-lg rounded-xl p-6 border border-red-500/30">
+            <div className="flex items-start gap-4">
+              <div className="text-4xl">⚠️</div>
+              <div className="flex-1">
+                <h2 className="text-2xl font-bold text-white mb-2">API Error</h2>
+                <p className="text-gray-300 mb-4">{error}</p>
+                <p className="text-sm text-gray-400 mb-4">
+                  This could be due to NASA DONKI API rate limits or connectivity issues.
+                  The DEMO_KEY has limited requests. Try refreshing in a few minutes.
+                </p>
+                <button
+                  onClick={() => {
+                    setLoading(true);
+                    fetchCMEData();
+                  }}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <>
