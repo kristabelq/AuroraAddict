@@ -6,6 +6,10 @@
     {
       "path": "/api/cron/cleanup-hunt-participants",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/update-space-weather",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

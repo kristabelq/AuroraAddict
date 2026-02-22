@@ -36,34 +36,35 @@ export default function CMEAlertsPage() {
 
   useEffect(() => {
     fetchCMEData();
-    // Refresh every 30 minutes
-    const interval = setInterval(fetchCMEData, 30 * 60 * 1000);
+    // Check for updates every 5 minutes (cache handles actual NASA API calls)
+    const interval = setInterval(() => fetchCMEData(), 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchCMEData = async () => {
+  const fetchCMEData = async (forceRefresh = false) => {
     try {
       setError(null);
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
 
-      const formatDate = (date: Date) => {
-        return date.toISOString().split("T")[0];
-      };
-
+      // Fetch from our cached API endpoint
       const response = await fetch(
-        `https://api.nasa.gov/DONKI/CME?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&api_key=DEMO_KEY`
+        `/api/space-weather/cme-cached${forceRefresh ? "?forceRefresh=true" : ""}`
       );
 
       if (!response.ok) {
-        throw new Error(`NASA DONKI API error: ${response.status} ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API error: ${response.status}`);
       }
 
-      const data = await response.json();
-      setCmeList(data || []);
-      setLastUpdate(new Date());
+      const result = await response.json();
+
+      setCmeList(result.data || []);
+      setLastUpdate(new Date(result.lastUpdated));
       setLoading(false);
+
+      // Show warning if data is stale
+      if (result.warning) {
+        console.warn("CME data warning:", result.warning);
+      }
     } catch (error) {
       console.error("Error fetching CME data:", error);
       setError(error instanceof Error ? error.message : "Failed to load CME data");
@@ -235,9 +236,36 @@ export default function CMEAlertsPage() {
                 Coronal Mass Ejections from NASA DONKI Database
               </p>
             </div>
-            <div className="text-right">
-              <div className="text-xs text-gray-500">Last updated</div>
-              <div className="text-sm text-gray-400">{formatTime(lastUpdate.toISOString())}</div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="text-xs text-gray-500">Last updated</div>
+                <div className="text-sm text-gray-400">{formatTime(lastUpdate.toISOString())}</div>
+                <div className="text-xs text-green-400">📦 Cached data</div>
+              </div>
+              <button
+                onClick={() => {
+                  setLoading(true);
+                  fetchCMEData(true);
+                }}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                title="Force refresh from NASA API"
+              >
+                <svg
+                  className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                {loading ? "Refreshing..." : "Refresh"}
+              </button>
             </div>
           </div>
         </div>

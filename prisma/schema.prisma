@@ -1097,3 +1097,20 @@ model ForecastEntry {
   @@index([forecastTime])
   @@index([source])
 }
+
+// Cached space weather data to reduce API calls
+model SpaceWeatherCache {
+  id          String   @id @default(cuid())
+  dataType    String   // 'cme', 'solar-flare', 'kp-forecast', etc.
+  data        Json     // The actual cached data
+  lastUpdated DateTime @default(now())
+  expiresAt   DateTime // When this cache should be refreshed
+  source      String   // API source (e.g., 'nasa-donki', 'noaa')
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([dataType, source])
+  @@index([dataType])
+  @@index([expiresAt])
+}
