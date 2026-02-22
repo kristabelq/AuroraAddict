@@ -52,7 +52,10 @@ export default function ImageCropper({
     <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex flex-col">
       {/* Header */}
       <div className="bg-gray-900 px-6 py-4 flex items-center justify-between">
-        <h3 className="text-white text-lg font-semibold">Crop Profile Photo</h3>
+        <div>
+          <h3 className="text-white text-lg font-semibold">Crop Profile Photo</h3>
+          <p className="text-gray-400 text-sm">Drag to reposition, pinch to zoom (1:1 square)</p>
+        </div>
         <button
           onClick={onCancel}
           className="text-gray-400 hover:text-white transition-colors"
@@ -130,6 +133,7 @@ export default function ImageCropper({
 
 /**
  * Helper function to create cropped image blob
+ * Ensures output is perfectly square (1:1 ratio) for profile images
  */
 async function getCroppedImg(
   imageSrc: string,
@@ -143,19 +147,24 @@ async function getCroppedImg(
     return null;
   }
 
-  // Set canvas size to match the cropped area
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  // Force square dimensions (1:1 ratio) - use the larger dimension
+  const size = Math.max(pixelCrop.width, pixelCrop.height);
+  canvas.width = size;
+  canvas.height = size;
 
-  // Draw the cropped image
+  // Center the image if dimensions don't match
+  const offsetX = (size - pixelCrop.width) / 2;
+  const offsetY = (size - pixelCrop.height) / 2;
+
+  // Draw the cropped image centered on square canvas
   ctx.drawImage(
     image,
     pixelCrop.x,
     pixelCrop.y,
     pixelCrop.width,
     pixelCrop.height,
-    0,
-    0,
+    offsetX,
+    offsetY,
     pixelCrop.width,
     pixelCrop.height
   );
