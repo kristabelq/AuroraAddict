@@ -51,7 +51,7 @@ export default function CMEAlertsPage() {
       };
 
       const response = await fetch(
-        `https://api.nasa.gov/DONKI/CME?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&api_key=NIXvIqoTvk1qIplmptffaH4sQYgTnlDD6bH4kIYM`
+        `https://api.nasa.gov/DONKI/CME?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&api_key=DEMO_KEY`
       );
 
       if (response.ok) {

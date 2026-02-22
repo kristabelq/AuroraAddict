@@ -2,6 +2,7 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
 import { generateUsername } from "./username";
+import { syncUserToSupabase } from "./supabase/auth-helpers";
 import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
@@ -49,6 +50,17 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+
+        // Sync user to Supabase Auth on first sign-in
+        try {
+          await syncUserToSupabase({
+            id: user.id,
+            email: user.email!,
+            name: user.name,
+          });
+        } catch (error) {
+          console.error("Error syncing user to Supabase:", error);
+        }
       }
       return token;
     },

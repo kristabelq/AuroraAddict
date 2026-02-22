@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { syncUserToSupabase } from "@/lib/supabase/auth-helpers";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
@@ -66,6 +67,18 @@ export async function POST(request: Request) {
         password: hashedPassword,
       },
     });
+
+    // Sync user to Supabase Auth
+    try {
+      await syncUserToSupabase({
+        id: user.id,
+        email: user.email!,
+        name: user.name,
+      });
+    } catch (error) {
+      console.error("Error syncing user to Supabase:", error);
+      // Continue even if sync fails - user is already created
+    }
 
     return NextResponse.json(
       {
