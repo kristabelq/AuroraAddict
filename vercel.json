@@ -9,7 +9,7 @@
     },
     {
       "path": "/api/cron/update-space-weather",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }

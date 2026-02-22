@@ -36,8 +36,8 @@ export default function CMEAlertsPage() {
 
   useEffect(() => {
     fetchCMEData();
-    // Check for updates every 5 minutes (cache handles actual NASA API calls)
-    const interval = setInterval(() => fetchCMEData(), 5 * 60 * 1000);
+    // Check for updates every 10 minutes (cache auto-refreshes if expired)
+    const interval = setInterval(() => fetchCMEData(), 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
