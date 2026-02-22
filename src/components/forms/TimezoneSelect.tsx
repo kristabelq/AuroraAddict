@@ -1,25 +1,27 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { getAllTimezones, formatTimezoneOffset, getTimezoneName } from "@/utils/timezones";
+import { getSimplifiedTimezones, formatTimezoneOffset } from "@/utils/timezones";
 
 interface TimezoneSelectProps {
   value: string;
   onChange: (timezone: string) => void;
   className?: string;
+  simplified?: boolean; // Use simplified GMT+X format
 }
 
 export default function TimezoneSelect({
   value,
   onChange,
   className = "",
+  simplified = true, // Default to simplified
 }: TimezoneSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const allTimezones = useMemo(() => getAllTimezones(), []);
+  const allTimezones = useMemo(() => getSimplifiedTimezones(), []);
 
   // Filter timezones based on search query
   const filteredTimezones = useMemo(() => {
@@ -42,7 +44,7 @@ export default function TimezoneSelect({
       return selected.label;
     }
     // Fallback if timezone not in list
-    return `${formatTimezoneOffset(value)} ${getTimezoneName(value)}`;
+    return formatTimezoneOffset(value).replace(/[()]/g, '');
   }, [value, allTimezones]);
 
   // Close dropdown when clicking outside

@@ -50,6 +50,50 @@ export function getAllTimezones(): TimezoneOption[] {
 }
 
 /**
+ * Get simplified timezone options (GMT offsets only, no location names)
+ * Grouped by unique offset to avoid duplicates
+ */
+export function getSimplifiedTimezones(): TimezoneOption[] {
+  const timezones: TimezoneOption[] = [];
+  const seenOffsets = new Set<string>();
+
+  // Get all supported timezones
+  const tzNames = Intl.supportedValuesOf('timeZone');
+
+  for (const tz of tzNames) {
+    try {
+      const offset = formatTimezoneOffset(tz);
+
+      // Skip if we've already added this offset
+      if (seenOffsets.has(offset)) {
+        continue;
+      }
+
+      seenOffsets.add(offset);
+
+      // Simple label: just the offset (e.g., "GMT+03:00")
+      const label = offset.replace(/[()]/g, ''); // Remove parentheses
+
+      timezones.push({
+        value: tz,
+        label,
+        offset,
+      });
+    } catch (error) {
+      // Skip invalid timezones
+      continue;
+    }
+  }
+
+  // Sort by offset
+  return timezones.sort((a, b) => {
+    const offsetA = a.offset.replace(/[()GMT:]/g, '');
+    const offsetB = b.offset.replace(/[()GMT:]/g, '');
+    return offsetA.localeCompare(offsetB);
+  });
+}
+
+/**
  * Get commonly used timezones (curated list for better UX)
  */
 export function getCommonTimezones(): TimezoneOption[] {

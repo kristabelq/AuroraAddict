@@ -624,7 +624,7 @@ export default function NewSightingPage() {
                       {/* Location Search */}
                       <div>
                         <label className="block text-xs text-gray-400 mb-1">
-                          📍 Location {img.latitude && img.longitude && <span className="text-green-400">✓ Auto-detected</span>}
+                          📍 Location {img.latitude && img.longitude ? <span className="text-green-400">✓ Auto-detected</span> : <span className="text-orange-400">* Required</span>}
                         </label>
                         <LocationAutocomplete
                           value={img.locationSearchValue || (img.latitude && img.longitude ? `${img.latitude.toFixed(4)}, ${img.longitude.toFixed(4)}` : "")}
@@ -634,7 +634,7 @@ export default function NewSightingPage() {
                               updateImageData(index, "manualLatitude", lat);
                               updateImageData(index, "manualLongitude", lng);
 
-                              // Auto-update timezone based on location
+                              // Auto-fetch timezone based on location
                               try {
                                 const response = await fetch(`/api/timezone?lat=${lat}&lng=${lng}`);
                                 const data = await response.json();
@@ -646,7 +646,7 @@ export default function NewSightingPage() {
                               }
                             }
                           }}
-                          placeholder="Search for location..."
+                          placeholder={img.latitude && img.longitude ? "Search to update location..." : "Enter location to continue..."}
                           className="w-full bg-white/10 border border-gray-600 rounded px-2 py-1.5 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-aurora-green"
                         />
                       </div>
@@ -675,17 +675,25 @@ export default function NewSightingPage() {
                         </div>
                       )}
 
-                      {/* Timezone */}
-                      {sightingType === "past" && (
+                      {/* Timezone - Only show when location is set */}
+                      {sightingType === "past" && (img.latitude || img.manualLatitude) && (
                         <div>
                           <label className="block text-xs text-gray-400 mb-1">
-                            🌍 Timezone {img.timezone && <span className="text-blue-300">✓ Auto-detected</span>}
+                            🌍 Timezone {(img.manualTimezone || img.timezone) && <span className="text-blue-300">✓ Auto-detected</span>}
                           </label>
                           <TimezoneSelect
                             value={img.manualTimezone || img.timezone || "UTC"}
                             onChange={(tz) => updateImageData(index, "manualTimezone", tz)}
                             className="w-full bg-white/10 border border-gray-600 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-aurora-blue"
+                            simplified={true}
                           />
+                        </div>
+                      )}
+
+                      {/* Location required message for timezone */}
+                      {sightingType === "past" && !(img.latitude || img.manualLatitude) && (
+                        <div className="text-xs text-orange-400">
+                          ℹ️ Enter location above to set timezone
                         </div>
                       )}
 
