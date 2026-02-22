@@ -13,17 +13,50 @@ export async function POST(req: Request) {
   }
 
   try {
-    const formData = await req.formData();
+    const contentType = req.headers.get("content-type");
+    const isJson = contentType?.includes("application/json");
 
-    const caption = formData.get("caption") as string;
-    const location = formData.get("location") as string;
-    const latitude = parseFloat(formData.get("latitude") as string);
-    const longitude = parseFloat(formData.get("longitude") as string);
-    const sightingType = (formData.get("sightingType") as string) || "realtime";
-    const huntId = formData.get("huntId") as string | null;
-    const sightingDate = formData.get("sightingDate") as string | null;
-    const sightingTime = formData.get("sightingTime") as string | null;
-    const imageFiles = formData.getAll("images") as File[];
+    let caption: string;
+    let location: string;
+    let latitude: number;
+    let longitude: number;
+    let sightingType: string;
+    let huntId: string | null;
+    let sightingDate: string | null;
+    let sightingTime: string | null;
+    let timezone: string | null = null;
+    let imageUrls: string[] = [];
+    let thumbnailUrls: string[] = [];
+    let imageFiles: File[] = [];
+
+    if (isJson) {
+      // New format: JSON with pre-uploaded image URLs
+      const body = await req.json();
+      caption = body.caption;
+      location = body.location;
+      latitude = parseFloat(body.latitude);
+      longitude = parseFloat(body.longitude);
+      sightingType = body.sightingType || "realtime";
+      huntId = body.huntId || null;
+      sightingDate = body.sightingDate || null;
+      sightingTime = body.sightingTime || null;
+      timezone = body.timezone || null;
+      imageUrls = body.imageUrls || [];
+      thumbnailUrls = body.thumbnailUrls || [];
+    } else {
+      // Old format: FormData with files
+      const formData = await req.formData();
+      caption = formData.get("caption") as string;
+      location = formData.get("location") as string;
+      latitude = parseFloat(formData.get("latitude") as string);
+      longitude = parseFloat(formData.get("longitude") as string);
+      sightingType = (formData.get("sightingType") as string) || "realtime";
+      huntId = formData.get("huntId") as string | null;
+      sightingDate = formData.get("sightingDate") as string | null;
+      sightingTime = formData.get("sightingTime") as string | null;
+      timezone = formData.get("timezone") as string | null;
+      imageFiles = formData.getAll("images") as File[];
+    }
 
     console.log("Received sighting data:", { sightingDate, sightingTime, sightingType });
 
@@ -35,44 +68,44 @@ export async function POST(req: Request) {
       );
     }
 
-    if (imageFiles.length === 0) {
+    // Process images if using FormData (old format)
+    if (imageFiles.length > 0) {
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
+
+        try {
+          // Upload to Supabase Storage with automatic thumbnail generation
+          const result = await uploadImage({
+            bucket: 'sightings',
+            userId: session.user.id,
+            file,
+            maxWidth: 1920,
+            maxHeight: 1080,
+            quality: 85,
+            generateThumbnail: true,
+            thumbnailSize: 400,
+          });
+
+          imageUrls.push(result.url);
+          if (result.thumbnailUrl) {
+            thumbnailUrls.push(result.thumbnailUrl);
+          }
+        } catch (error) {
+          console.error('Error uploading image to Supabase:', error);
+          return NextResponse.json(
+            { error: "Failed to upload image" },
+            { status: 500 }
+          );
+        }
+      }
+    }
+
+    // Validate we have images (either uploaded or provided as URLs)
+    if (imageUrls.length === 0) {
       return NextResponse.json(
         { error: "At least one image is required" },
         { status: 400 }
       );
-    }
-
-    // Upload images to Supabase Storage
-    const imageUrls: string[] = [];
-    const thumbnailUrls: string[] = [];
-
-    for (let i = 0; i < imageFiles.length; i++) {
-      const file = imageFiles[i];
-
-      try {
-        // Upload to Supabase Storage with automatic thumbnail generation
-        const result = await uploadImage({
-          bucket: 'sightings',
-          userId: session.user.id,
-          file,
-          maxWidth: 1920,
-          maxHeight: 1080,
-          quality: 85,
-          generateThumbnail: true,
-          thumbnailSize: 400,
-        });
-
-        imageUrls.push(result.url);
-        if (result.thumbnailUrl) {
-          thumbnailUrls.push(result.thumbnailUrl);
-        }
-      } catch (error) {
-        console.error('Error uploading image to Supabase:', error);
-        return NextResponse.json(
-          { error: "Failed to upload image" },
-          { status: 500 }
-        );
-      }
     }
 
     // Parse sightingDate if provided

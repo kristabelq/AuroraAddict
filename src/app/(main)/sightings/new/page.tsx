@@ -10,6 +10,7 @@ import { extractPhotoMetadata, reverseGeocode, formatCaptureDate, getDateString,
 import { isPhotoOutsideHuntDates, formatValidationWindow } from "@/utils/huntValidation";
 import LocationAutocomplete from "@/components/forms/LocationAutocomplete";
 import TimezoneSelect from "@/components/forms/TimezoneSelect";
+import { uploadImageToSupabase } from "@/lib/supabase/client-upload";
 
 interface ImagePreview {
   file: File;
@@ -232,17 +233,34 @@ export default function NewSightingPage() {
       return;
     }
 
+    if (!session?.user?.id) {
+      toast.error("Please sign in to post");
+      return;
+    }
+
     setLoading(true);
 
     try {
       // Create individual posts for each image
       const promises = images.map(async (img) => {
-        const formData = new FormData();
-        formData.append("images", img.file);
+        // First, upload image to Supabase Storage
+        const uploadResult = await uploadImageToSupabase(
+          img.file,
+          'sightings',
+          session.user.id
+        );
 
-        // Use per-photo caption, fallback to global caption
-        formData.append("caption", img.caption || caption);
-        formData.append("sightingType", sightingType);
+        if (!uploadResult) {
+          throw new Error('Failed to upload image');
+        }
+
+        // Prepare sighting data
+        const sightingData: any = {
+          imageUrls: [uploadResult.url],
+          thumbnailUrls: [], // TODO: Generate thumbnails client-side
+          caption: img.caption || caption,
+          sightingType,
+        };
 
         // Priority: manual input > extracted metadata > global fallback
         let imgLat: number | undefined;
@@ -260,8 +278,8 @@ export default function NewSightingPage() {
         }
 
         if (imgLat && imgLng) {
-          formData.append("latitude", imgLat.toString());
-          formData.append("longitude", imgLng.toString());
+          sightingData.latitude = imgLat;
+          sightingData.longitude = imgLng;
 
           // Use location search value or reverse geocode
           let locationName = img.locationSearchValue || location;
@@ -269,12 +287,12 @@ export default function NewSightingPage() {
             // If no readable location name, reverse geocode
             locationName = await reverseGeocode(imgLat, imgLng);
           }
-          formData.append("location", locationName);
+          sightingData.location = locationName;
         }
 
         // Include huntId if present (for hunt-specific sightings)
         if (huntId) {
-          formData.append("huntId", huntId);
+          sightingData.huntId = huntId;
         }
 
         // Date, time, and timezone - Priority: manual input > extracted metadata > global fallback
@@ -311,16 +329,20 @@ export default function NewSightingPage() {
         }
 
         if (finalDate) {
-          formData.append("sightingDate", finalDate);
+          sightingData.sightingDate = finalDate;
           if (finalTime) {
-            formData.append("sightingTime", finalTime);
+            sightingData.sightingTime = finalTime;
           }
-          formData.append("timezone", finalTimezone || "UTC");
+          sightingData.timezone = finalTimezone || "UTC";
         }
 
+        // Send JSON with image URLs (not files)
         return fetch("/api/sightings/create", {
           method: "POST",
-          body: formData,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(sightingData),
         });
       });
 
