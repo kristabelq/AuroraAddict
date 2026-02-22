@@ -35,6 +35,7 @@ export default function CMEAlertsPage() {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [cacheAgeMinutes, setCacheAgeMinutes] = useState<number>(0);
   const [isFresh, setIsFresh] = useState<boolean>(true);
+  const [apiStatus, setApiStatus] = useState<string>("OK");
 
   useEffect(() => {
     fetchCMEData();
@@ -90,6 +91,7 @@ export default function CMEAlertsPage() {
       setLastUpdate(result.lastFetched ? new Date(result.lastFetched) : new Date());
       setCacheAgeMinutes(result.cacheAgeMinutes || 0);
       setIsFresh(result.fresh !== false);
+      setApiStatus(result.apiStatus || "OK");
       setLoading(false);
     } catch (error) {
       console.error("Error fetching CME data:", error);
@@ -300,6 +302,22 @@ export default function CMEAlertsPage() {
       </div>
 
       <div className="max-w-screen-lg mx-auto p-4 space-y-6">
+        {/* NASA API Status Warning */}
+        {!loading && !error && apiStatus !== "OK" && (
+          <div className="bg-yellow-500/10 backdrop-blur-lg rounded-xl p-4 border border-yellow-500/30">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">⚠️</div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-yellow-400 mb-1">{apiStatus}</h3>
+                <p className="text-sm text-gray-300">
+                  Showing cached data from last successful update. The data may be outdated.
+                  We'll automatically retry fetching fresh data when the NASA API is back online.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-xl text-white">Loading CME data...</div>

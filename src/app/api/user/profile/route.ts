@@ -143,7 +143,7 @@ export async function PATCH(req: Request) {
 
   try {
     const body = await req.json();
-    const { bio, username, instagram, whatsappNumber, publicEmail } = body;
+    const { bio, username, instagram, whatsappNumber, publicEmail, image } = body;
 
     // Check if username is being updated and if it's already taken
     if (username !== undefined && username !== null && username !== "") {
@@ -165,6 +165,7 @@ export async function PATCH(req: Request) {
       instagram?: string | null;
       whatsappNumber?: string | null;
       publicEmail?: string | null;
+      image?: string | null;
     } = {};
 
     if (bio !== undefined) {
@@ -197,6 +198,9 @@ export async function PATCH(req: Request) {
       } else {
         updateData.publicEmail = publicEmail.trim();
       }
+    }
+    if (image !== undefined) {
+      updateData.image = image || null;
     }
 
     const user = await prisma.user.update({

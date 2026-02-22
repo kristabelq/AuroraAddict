@@ -28,12 +28,14 @@ export async function GET(req: Request) {
       forceRefresh ||
       now.getTime() - new Date(lastFetch.lastUpdated).getTime() > 30 * 60 * 1000; // 30 minutes
 
+    let apiError: string | null = null;
     if (shouldRefresh) {
       console.log("[CME Records] Fetching fresh data from NASA...");
       try {
         await fetchAndStoreCMEData();
       } catch (error) {
         console.error("[CME Records] Failed to fetch from NASA:", error);
+        apiError = error instanceof Error ? error.message : "Unknown error";
         // Continue to return cached data even if fetch fails
       }
     }
@@ -67,6 +69,16 @@ export async function GET(req: Request) {
       ? Math.floor((now.getTime() - new Date(fetchMeta.lastUpdated).getTime()) / (1000 * 60))
       : 999;
 
+    // Determine API status message
+    let statusMessage = "OK";
+    if (!fetchMeta) {
+      statusMessage = "NASA DONKI API has not been reached yet";
+    } else if (apiError) {
+      statusMessage = "NASA DONKI API is currently unavailable";
+    } else if (cacheAgeMinutes > 60) {
+      statusMessage = "Data may be outdated (NASA API refresh failed)";
+    }
+
     return NextResponse.json({
       records: cmeRecords,
       count: cmeRecords.length,
@@ -74,6 +86,8 @@ export async function GET(req: Request) {
       lastFetched: fetchMeta?.lastUpdated,
       cacheAgeMinutes,
       fresh: cacheAgeMinutes < 30,
+      apiError: apiError,
+      apiStatus: statusMessage,
     });
   } catch (error) {
     console.error("[CME Records] Error:", error);
