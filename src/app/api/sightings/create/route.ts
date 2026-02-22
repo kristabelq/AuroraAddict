@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import sharp from "sharp";
+import { uploadImage } from "@/lib/supabase/storage";
 import { onSightingPostedToHunt } from "@/lib/huntStats";
 
 export async function POST(req: Request) {
@@ -44,61 +42,37 @@ export async function POST(req: Request) {
       );
     }
 
-    // Process and store images with thumbnails
+    // Upload images to Supabase Storage
     const imageUrls: string[] = [];
     const thumbnailUrls: string[] = [];
 
-    // Create uploads directories if they don't exist
-    const uploadsDir = join(process.cwd(), "public", "uploads", "sightings");
-    const thumbnailsDir = join(process.cwd(), "public", "uploads", "sightings", "thumbnails");
-    try {
-      await mkdir(uploadsDir, { recursive: true });
-      await mkdir(thumbnailsDir, { recursive: true });
-    } catch (error) {
-      // Directories might already exist
-    }
-
     for (let i = 0; i < imageFiles.length; i++) {
       const file = imageFiles[i];
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
 
-      // Generate unique filename
-      const timestamp = Date.now();
-      const randomStr = Math.random().toString(36).substring(7);
-      const filename = `${session.user.id}-${timestamp}-${randomStr}.jpg`;
-      const thumbnailFilename = `${session.user.id}-${timestamp}-${randomStr}-thumb.jpg`;
-
-      const filepath = join(uploadsDir, filename);
-      const thumbnailPath = join(thumbnailsDir, thumbnailFilename);
-
-      // Process full-resolution image (for feeds)
-      await sharp(buffer)
-        .resize(1920, 1080, {
-          fit: "inside",
-          withoutEnlargement: true,
-        })
-        .jpeg({
+      try {
+        // Upload to Supabase Storage with automatic thumbnail generation
+        const result = await uploadImage({
+          bucket: 'sightings',
+          userId: session.user.id,
+          file,
+          maxWidth: 1920,
+          maxHeight: 1080,
           quality: 85,
-          progressive: true,
-        })
-        .toFile(filepath);
+          generateThumbnail: true,
+          thumbnailSize: 400,
+        });
 
-      // Generate 400x400 thumbnail (for grids)
-      await sharp(buffer)
-        .resize(400, 400, {
-          fit: "cover",
-          position: "center",
-        })
-        .jpeg({
-          quality: 80,
-          progressive: true,
-        })
-        .toFile(thumbnailPath);
-
-      // Store relative URLs
-      imageUrls.push(`/uploads/sightings/${filename}`);
-      thumbnailUrls.push(`/uploads/sightings/thumbnails/${thumbnailFilename}`);
+        imageUrls.push(result.url);
+        if (result.thumbnailUrl) {
+          thumbnailUrls.push(result.thumbnailUrl);
+        }
+      } catch (error) {
+        console.error('Error uploading image to Supabase:', error);
+        return NextResponse.json(
+          { error: "Failed to upload image" },
+          { status: 500 }
+        );
+      }
     }
 
     // Parse sightingDate if provided

@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { writeFile } from "fs/promises";
-import path from "path";
-import sharp from "sharp";
+import { uploadImage } from "@/lib/supabase/storage";
 import { toZonedTime } from "date-fns-tz";
 import { extractCountryFromLocation } from "@/lib/countries";
 
@@ -89,32 +87,26 @@ export async function POST(req: Request) {
 
     // Process cover image if provided
     if (coverImageFile) {
-      const bytes = await coverImageFile.arrayBuffer();
-      const buffer = Buffer.from(bytes);
+      try {
+        // Upload to Supabase Storage with 16:9 landscape dimensions
+        const result = await uploadImage({
+          bucket: 'hunts',
+          userId: session.user.id,
+          file: coverImageFile,
+          maxWidth: 1600,
+          maxHeight: 900,
+          quality: 85,
+          generateThumbnail: false,
+        });
 
-      // Process and resize image to 16:9 landscape (1600x900)
-      const processedImage = await sharp(buffer)
-        .resize(1600, 900, {
-          fit: "cover",
-          position: "center",
-        })
-        .jpeg({ quality: 85 })
-        .toBuffer();
-
-      // Generate unique filename
-      const filename = `hunt-cover-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
-      const filepath = path.join(process.cwd(), "public", "uploads", "hunts", filename);
-
-      // Ensure directory exists
-      const dir = path.dirname(filepath);
-      const fs = require("fs");
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+        coverImageUrl = result.url;
+      } catch (error) {
+        console.error('Error uploading hunt cover image:', error);
+        return NextResponse.json(
+          { error: "Failed to upload cover image" },
+          { status: 500 }
+        );
       }
-
-      // Save file
-      await writeFile(filepath, processedImage);
-      coverImageUrl = `/uploads/hunts/${filename}`;
     }
 
     // Create hunt, add creator as participant, and update cached counters in a transaction
