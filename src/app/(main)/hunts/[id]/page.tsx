@@ -119,7 +119,7 @@ export default function HuntDetailsPage({
         } else if (data.requiresApproval) {
           toast.success(data.message || "Request sent! Waiting for organizer approval");
         } else if (data.requiresPayment) {
-          toast.success(data.message || "Proceed to payment to confirm your spot");
+          toast.success(data.message || "Joined! Please pay the organizer directly and mark your payment as complete.");
         } else {
           toast.success(data.message || "Successfully joined hunt!");
         }
@@ -205,6 +205,56 @@ export default function HuntDetailsPage({
         fetchHuntDetails(); // Refresh to update participant list
       } else {
         toast.error(data.error || "Failed to reject request");
+      }
+    } catch (err) {
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handler for participant to mark payment as made
+  const handleMarkPaymentMade = async () => {
+    if (!huntId) return;
+
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/hunts/${huntId}/payment/mark-paid`, {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || "Payment marked as made! Waiting for organizer confirmation.");
+        fetchHuntDetails();
+      } else {
+        toast.error(data.error || "Failed to mark payment");
+      }
+    } catch (err) {
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handler for organizer to confirm payment received
+  const handleConfirmPayment = async (userId: string) => {
+    if (!huntId) return;
+
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/hunts/${huntId}/payment/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || "Payment confirmed! Participant is now confirmed.");
+        fetchHuntDetails();
+      } else {
+        toast.error(data.error || "Failed to confirm payment");
       }
     } catch (err) {
       toast.error("An error occurred. Please try again.");
@@ -350,10 +400,11 @@ export default function HuntDetailsPage({
     (p) => p.userId === session?.user?.id
   );
   const isPendingApproval = currentUserParticipant?.status === "pending" && !hunt.isPaid;
-  const isPendingPayment = currentUserParticipant?.status === "pending" && hunt.isPaid && currentUserParticipant?.paymentStatus !== "confirmed";
-  const isPaymentConfirmed = hunt.isPaid && currentUserParticipant?.status === "confirmed" && currentUserParticipant?.paymentStatus === "confirmed";
+  const isPendingPayment = currentUserParticipant?.status === "pending" && hunt.isPaid && currentUserParticipant?.paymentStatus === "pending";
+  const isPaymentMarkedPaid = currentUserParticipant?.status === "pending" && hunt.isPaid && currentUserParticipant?.paymentStatus === "marked_paid";
+  const isPaymentConfirmed = hunt.isPaid && currentUserParticipant?.status === "confirmed";
   const isWaitlisted = currentUserParticipant?.status === "waitlisted";
-  const isConfirmed = currentUserParticipant?.status === "confirmed" && !isPaymentConfirmed;
+  const isConfirmed = currentUserParticipant?.status === "confirmed" && !hunt.isPaid;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black pb-24">
@@ -577,36 +628,6 @@ export default function HuntDetailsPage({
             <p className="text-gray-400 text-sm">No confirmed participants yet</p>
           )}
 
-          {hunt.isPaid && pendingParticipants.length > 0 && (
-            <>
-              <h3 className="text-lg font-semibold text-white mt-6 mb-3">
-                Pending Payment ({pendingParticipants.length})
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {pendingParticipants.map((participant) => (
-                  <button
-                    key={participant.id}
-                    onClick={() => router.push(`/hunts?organizer=${participant.user.username || participant.user.id}`)}
-                    className="flex flex-col items-center gap-2 opacity-60 hover:bg-white/5 rounded-lg p-2 transition-colors"
-                  >
-                    <img
-                      src={participant.user.image || "/default-avatar.png"}
-                      alt={participant.user.name}
-                      className="w-16 h-16 rounded-full"
-                    />
-                    <div className="text-center">
-                      <div className="text-sm text-white">
-                        {participant.user.name}
-                      </div>
-                      <div className="text-xs text-yellow-400">
-                        Payment pending
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
         </div>
 
         {/* Hunt Chat Button - Only visible to organizer and confirmed participants */}
@@ -633,39 +654,7 @@ export default function HuntDetailsPage({
         )}
 
         {/* User Status Buttons - After Participants */}
-        {/* 1. Pending Payment (Gold/Orange) + Cancel Request - For paid hunts with pending status */}
-        {!hunt.isCreator && isPendingPayment && (
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {/* Left: Payment Pending (Inactionable) */}
-            <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg opacity-90 cursor-default">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span>Payment Pending</span>
-            </div>
-
-            {/* Right: Cancel Request */}
-            <button
-              onClick={handleLeaveHunt}
-              disabled={actionLoading}
-              className="bg-red-500 text-white py-4 rounded-xl font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-            >
-              {actionLoading ? "Cancelling..." : "Cancel Request"}
-            </button>
-          </div>
-        )}
-
-        {/* 2. Pending Approval (Gold) + Cancel Request - For private hunts awaiting organizer approval */}
+        {/* 1. Pending Approval (Gold) + Cancel Request - For private hunts awaiting organizer approval */}
         {!hunt.isCreator && isPendingApproval && (
           <div className="grid grid-cols-2 gap-3 mb-6">
             {/* Left: Pending Approval (Inactionable) */}
@@ -693,6 +682,98 @@ export default function HuntDetailsPage({
               className="bg-red-500 text-white py-4 rounded-xl font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
               {actionLoading ? "Cancelling..." : "Cancel Request"}
+            </button>
+          </div>
+        )}
+
+        {/* 2. Payment Pending - Participant needs to pay and mark as paid */}
+        {!hunt.isCreator && isPendingPayment && (
+          <div className="space-y-3 mb-6">
+            <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-2 border-yellow-500/50 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="font-semibold text-yellow-200">Payment Required: ${hunt.price?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <p className="text-sm text-yellow-200/80 mb-3">
+                Pay the organizer directly (via WhatsApp, bank transfer, etc.) then mark your payment as complete below.
+              </p>
+              {hunt.whatsappNumber && (
+                <a
+                  href={`https://wa.me/${hunt.whatsappNumber}?text=${encodeURIComponent(`Hi! I'd like to pay for the hunt "${hunt.name}". How can I send the payment?`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm text-green-400 hover:text-green-300 mb-3"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                  </svg>
+                  Contact organizer on WhatsApp
+                </a>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={handleMarkPaymentMade}
+                disabled={actionLoading}
+                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                {actionLoading ? "Marking..." : "I've Paid"}
+              </button>
+              <button
+                onClick={handleLeaveHunt}
+                disabled={actionLoading}
+                className="bg-red-500 text-white py-4 rounded-xl font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              >
+                {actionLoading ? "Cancelling..." : "Cancel"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 2b. Payment Marked - Awaiting organizer confirmation */}
+        {!hunt.isCreator && isPaymentMarkedPaid && (
+          <div className="space-y-3 mb-6">
+            <div className="bg-gradient-to-r from-blue-500/20 to-indigo-500/20 border-2 border-blue-500/50 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-blue-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="font-semibold text-blue-200">Payment Marked - Awaiting Confirmation</span>
+              </div>
+              <p className="text-sm text-blue-200/80">
+                You've marked your payment as complete. The organizer will confirm once they receive it.
+              </p>
+            </div>
+            <button
+              onClick={handleLeaveHunt}
+              disabled={actionLoading}
+              className="w-full bg-red-500 text-white py-4 rounded-xl font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+            >
+              {actionLoading ? "Cancelling..." : "Cancel Request"}
+            </button>
+          </div>
+        )}
+
+        {/* 2c. Payment Confirmed - For confirmed paid hunt participants */}
+        {!hunt.isCreator && isPaymentConfirmed && (
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg opacity-90 cursor-default">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Confirmed & Paid</span>
+            </div>
+            <button
+              onClick={handleLeaveHunt}
+              disabled={actionLoading}
+              className="bg-red-500 text-white py-4 rounded-xl font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+            >
+              {actionLoading ? "Leaving..." : "Leave Hunt"}
             </button>
           </div>
         )}
@@ -729,39 +810,7 @@ export default function HuntDetailsPage({
           </div>
         )}
 
-        {/* 4. Payment Received + Leave Hunt (Side by Side) - For confirmed paid participants */}
-        {!hunt.isCreator && isPaymentConfirmed && (
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {/* Left: Payment Received (Inactionable) */}
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg opacity-90 cursor-default">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span>Payment Received</span>
-            </div>
-
-            {/* Right: Leave Hunt */}
-            <button
-              onClick={handleLeaveHunt}
-              disabled={actionLoading}
-              className="bg-red-500 text-white py-4 rounded-xl font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-            >
-              {actionLoading ? "Leaving..." : "Leave Hunt"}
-            </button>
-          </div>
-        )}
-
-        {/* 5. Confirmed (Green) + Leave Hunt - For confirmed participants (non-paid hunts) */}
+        {/* 4. Confirmed (Green) + Leave Hunt - For confirmed free hunt participants */}
         {!hunt.isCreator && isConfirmed && (
           <div className="grid grid-cols-2 gap-3 mb-6">
             {/* Left: Confirmed (Inactionable) */}
@@ -794,7 +843,7 @@ export default function HuntDetailsPage({
         )}
 
         {/* Initial Action Buttons - For non-participants */}
-        {!hunt.isCreator && !hunt.isUserParticipant && !isPendingApproval && !isPendingPayment && !isWaitlisted && !isPastHunt && (
+        {!hunt.isCreator && !hunt.isUserParticipant && !isPendingApproval && !isPendingPayment && !isPaymentMarkedPaid && !isWaitlisted && !isPastHunt && (
           <>
             {/* Capacity is met - Show waitlist or full message */}
             {hunt.capacity !== null && confirmedParticipants.length >= hunt.capacity ? (
@@ -1139,6 +1188,155 @@ export default function HuntDetailsPage({
             </>
           )}
         </div>
+
+        {/* Pending Payment Confirmations (Only visible to hunt creator) - For paid hunts */}
+        {hunt.isCreator && hunt.isPaid && pendingParticipants.filter(p => p.paymentStatus === "marked_paid").length > 0 && (
+          <div className="bg-green-500/10 backdrop-blur-lg rounded-xl p-6 mb-6 border-2 border-green-500/30">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="relative">
+                <svg
+                  className="w-6 h-6 text-green-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {pendingParticipants.filter(p => p.paymentStatus === "marked_paid").length}
+                </span>
+              </div>
+              <h2 className="text-xl font-semibold text-green-200">
+                Payments to Confirm ({pendingParticipants.filter(p => p.paymentStatus === "marked_paid").length})
+              </h2>
+            </div>
+
+            <p className="text-green-200/80 text-sm mb-4">
+              These participants have marked their payment as complete. Confirm once you've received the payment.
+            </p>
+
+            <div className="space-y-3">
+              {pendingParticipants.filter(p => p.paymentStatus === "marked_paid").map((participant) => (
+                <div
+                  key={participant.id}
+                  className="flex items-center justify-between bg-white/5 rounded-lg p-4"
+                >
+                  <button
+                    onClick={() => router.push(`/profile/${participant.user.username || participant.user.id}`)}
+                    className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                  >
+                    <img
+                      src={participant.user.image || "/default-avatar.png"}
+                      alt={participant.user.name}
+                      className="w-12 h-12 rounded-full"
+                    />
+                    <div className="text-left">
+                      <div className="text-sm font-medium text-white">
+                        {participant.user.name}
+                      </div>
+                      <div className="text-xs text-green-400">
+                        Marked paid {formatDistanceToNow(new Date(participant.joinedAt), {
+                          addSuffix: true,
+                        })}
+                      </div>
+                    </div>
+                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleConfirmPayment(participant.userId)}
+                      disabled={actionLoading}
+                      className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Confirm Payment
+                    </button>
+                    <button
+                      onClick={() => handleRejectRequest(participant.userId)}
+                      disabled={actionLoading}
+                      className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Awaiting Payment (Only visible to hunt creator) - For paid hunts */}
+        {hunt.isCreator && hunt.isPaid && pendingParticipants.filter(p => p.paymentStatus === "pending").length > 0 && (
+          <div className="bg-yellow-500/10 backdrop-blur-lg rounded-xl p-6 mb-6 border-2 border-yellow-500/30">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="relative">
+                <svg
+                  className="w-6 h-6 text-yellow-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {pendingParticipants.filter(p => p.paymentStatus === "pending").length}
+                </span>
+              </div>
+              <h2 className="text-xl font-semibold text-yellow-200">
+                Awaiting Payment ({pendingParticipants.filter(p => p.paymentStatus === "pending").length})
+              </h2>
+            </div>
+
+            <p className="text-yellow-200/80 text-sm mb-4">
+              These participants have joined but haven't marked their payment yet.
+            </p>
+
+            <div className="space-y-3">
+              {pendingParticipants.filter(p => p.paymentStatus === "pending").map((participant) => (
+                <div
+                  key={participant.id}
+                  className="flex items-center justify-between bg-white/5 rounded-lg p-4"
+                >
+                  <button
+                    onClick={() => router.push(`/profile/${participant.user.username || participant.user.id}`)}
+                    className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                  >
+                    <img
+                      src={participant.user.image || "/default-avatar.png"}
+                      alt={participant.user.name}
+                      className="w-12 h-12 rounded-full"
+                    />
+                    <div className="text-left">
+                      <div className="text-sm font-medium text-white">
+                        {participant.user.name}
+                      </div>
+                      <div className="text-xs text-yellow-400">
+                        Joined {formatDistanceToNow(new Date(participant.joinedAt), {
+                          addSuffix: true,
+                        })} • Payment pending
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleRejectRequest(participant.userId)}
+                    disabled={actionLoading}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Pending Requests (Only visible to hunt creator) - For private/approval-required hunts */}
         {hunt.isCreator && !hunt.isPaid && pendingParticipants.length > 0 && (

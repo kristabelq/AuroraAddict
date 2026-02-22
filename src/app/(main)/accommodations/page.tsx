@@ -71,11 +71,7 @@ export default function AccommodationsPage() {
   useEffect(() => {
     if (status === "loading") return;
 
-    if (status === "unauthenticated") {
-      router.push("/auth/signin");
-      return;
-    }
-
+    // Only redirect to onboarding if user is authenticated but hasn't completed it
     if (session?.user && !session.user.onboardingComplete) {
       router.push("/onboarding");
     }

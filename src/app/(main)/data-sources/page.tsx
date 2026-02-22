@@ -3,6 +3,46 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 
+interface DataSource {
+  name: string;
+  description: string;
+  url: string;
+  updateFrequency: string;
+  icon: string;
+}
+
+function SourceCard({ source }: { source: DataSource }) {
+  return (
+    <div className="bg-white/5 rounded-xl p-5 border border-white/10 hover:bg-white/10 transition-colors">
+      <div className="flex items-start gap-4">
+        <span className="text-4xl">{source.icon}</span>
+        <div className="flex-1">
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-1">{source.name}</h3>
+              <p className="text-sm text-gray-400">{source.description}</p>
+            </div>
+            <span className="text-xs bg-green-500/20 text-green-300 px-3 py-1 rounded-full whitespace-nowrap ml-2">
+              {source.updateFrequency}
+            </span>
+          </div>
+
+          {source.url !== "N/A - Calculated locally" && (
+            <a
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-400 hover:text-blue-300 underline inline-block"
+            >
+              {source.url}
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DataSourcesPage() {
   const router = useRouter();
   const [lastChecked, setLastChecked] = useState<Date>(new Date());
@@ -16,26 +56,66 @@ export default function DataSourcesPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const dataSources = [
+  const spaceWeatherSources = [
     {
       name: "NOAA Space Weather Prediction Center",
-      description: "KP Index, Solar Wind Data (Bz, Speed, Density)",
+      description: "Kp Index, Solar Wind Data (Bz, Speed, Density), OVATION Aurora Model",
       url: "https://services.swpc.noaa.gov/",
-      endpoints: [
-        "/text/3-day-geomag-forecast.txt",
-        "/products/solar-wind/mag-1-day.json",
-        "/products/solar-wind/plasma-1-day.json"
-      ],
       updateFrequency: "Real-time (1-minute intervals)",
       icon: "🛰️"
     },
     {
+      name: "GFZ Potsdam Hp30/Hp60 Index",
+      description: "High-resolution geomagnetic indices updated every 30 minutes (vs Kp's 3-hour updates). Catches substorms that Kp misses.",
+      url: "https://kp.gfz-potsdam.de/",
+      updateFrequency: "Every 30 minutes",
+      icon: "⚡"
+    },
+    {
+      name: "SuperMAG Magnetometer Network",
+      description: "Ground-based magnetometer readings in nanoTesla (nT) from 300+ stations worldwide. Essential for real substorm detection.",
+      url: "https://supermag.jhuapl.edu/",
+      updateFrequency: "Real-time (1-minute intervals)",
+      icon: "🧲"
+    },
+    {
+      name: "GFZ Helmholtz 3-Day Forecast",
+      description: "Machine learning-based aurora forecast for trip planning. Predicts Kp and geomagnetic activity 72 hours ahead.",
+      url: "https://spaceweather.gfz.de/",
+      updateFrequency: "Every 3 hours",
+      icon: "📊"
+    }
+  ];
+
+  const auroraIntelligenceSources = [
+    {
+      name: "Energy Transfer Calculator",
+      description: "Measures how much solar wind energy is entering Earth's magnetic field.",
+      url: "N/A - Calculated locally",
+      updateFrequency: "Real-time calculation",
+      icon: "🔬"
+    },
+    {
+      name: "Substorm Phase Detection",
+      description: "Tracks aurora substorm cycle from quiet through expansion to recovery.",
+      url: "N/A - Calculated locally",
+      updateFrequency: "Real-time calculation",
+      icon: "🌊"
+    },
+    {
+      name: "Aurora Verdict System",
+      description: "Combines all data sources to produce hunting recommendations.",
+      url: "N/A - Calculated locally",
+      updateFrequency: "Real-time calculation",
+      icon: "🎯"
+    }
+  ];
+
+  const supportingSources = [
+    {
       name: "Open-Meteo Weather API",
       description: "Cloud Cover, Wind, Humidity, Precipitation Forecasts",
       url: "https://api.open-meteo.com/",
-      endpoints: [
-        "/v1/forecast?hourly=cloud_cover,wind_speed_10m,wind_direction_10m,relative_humidity_2m,precipitation_probability"
-      ],
       updateFrequency: "Hourly updates",
       icon: "☁️"
     },
@@ -43,9 +123,6 @@ export default function DataSourcesPage() {
       name: "Sunrise-Sunset.org API",
       description: "Sunrise, Sunset, and Twilight Times",
       url: "https://api.sunrise-sunset.org/",
-      endpoints: [
-        "/json?lat={lat}&lng={lon}&formatted=0"
-      ],
       updateFrequency: "Daily calculations",
       icon: "🌅"
     },
@@ -53,9 +130,6 @@ export default function DataSourcesPage() {
       name: "Moon Phase API",
       description: "Moon Phase and Illumination Data",
       url: "https://api.farmsense.net/",
-      endpoints: [
-        "/v1/moonphases/?d={timestamp}"
-      ],
       updateFrequency: "Real-time calculations",
       icon: "🌙"
     },
@@ -63,10 +137,6 @@ export default function DataSourcesPage() {
       name: "OpenStreetMap Nominatim",
       description: "Location Search and Geocoding",
       url: "https://nominatim.openstreetmap.org/",
-      endpoints: [
-        "/search?q={query}&format=json",
-        "/reverse?lat={lat}&lon={lon}&format=json"
-      ],
       updateFrequency: "Real-time queries",
       icon: "🗺️"
     },
@@ -74,9 +144,6 @@ export default function DataSourcesPage() {
       name: "OSRM Routing Engine",
       description: "Drive Time and Distance Calculations",
       url: "https://router.project-osrm.org/",
-      endpoints: [
-        "/route/v1/driving/{lon1},{lat1};{lon2},{lat2}"
-      ],
       updateFrequency: "Real-time calculations",
       icon: "🚗"
     },
@@ -84,9 +151,6 @@ export default function DataSourcesPage() {
       name: "Bortle Scale Calculation",
       description: "Light Pollution Classification (Algorithm-based)",
       url: "N/A - Calculated locally",
-      endpoints: [
-        "Based on population density and distance from urban centers"
-      ],
       updateFrequency: "Static calculation",
       icon: "💡"
     }
@@ -141,59 +205,54 @@ export default function DataSourcesPage() {
           </div>
         </div>
 
-        {/* Data Sources List */}
-        <div className="space-y-4">
-          {dataSources.map((source, index) => (
-            <div
-              key={index}
-              className="bg-white/5 rounded-xl p-5 border border-white/10 hover:bg-white/10 transition-colors"
-            >
-              <div className="flex items-start gap-4">
-                <span className="text-4xl">{source.icon}</span>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3 className="text-xl font-bold text-white mb-1">{source.name}</h3>
-                      <p className="text-sm text-gray-400">{source.description}</p>
-                    </div>
-                    <span className="text-xs bg-green-500/20 text-green-300 px-3 py-1 rounded-full whitespace-nowrap">
-                      {source.updateFrequency}
-                    </span>
-                  </div>
+        {/* Space Weather Sources */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold text-aurora-green mb-4 flex items-center gap-2">
+            <span>🛰️</span> Space Weather Data
+          </h2>
+          <div className="space-y-4">
+            {spaceWeatherSources.map((source, index) => (
+              <SourceCard key={index} source={source} />
+            ))}
+          </div>
+        </div>
 
-                  {source.url !== "N/A - Calculated locally" && (
-                    <a
-                      href={source.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-400 hover:text-blue-300 underline mb-2 inline-block"
-                    >
-                      {source.url}
-                    </a>
-                  )}
+        {/* Aurora Intelligence Sources */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold text-aurora-purple mb-4 flex items-center gap-2">
+            <span>🧠</span> Aurora Intelligence (Proprietary)
+          </h2>
+          <div className="space-y-4">
+            {auroraIntelligenceSources.map((source, index) => (
+              <SourceCard key={index} source={source} />
+            ))}
+          </div>
+        </div>
 
-                  <div className="mt-3 bg-black/20 rounded-lg p-3">
-                    <div className="text-xs text-gray-400 mb-2 font-semibold">API Endpoints:</div>
-                    <div className="space-y-1">
-                      {source.endpoints.map((endpoint, idx) => (
-                        <div key={idx} className="text-xs font-mono text-gray-300 break-all">
-                          {endpoint}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+        {/* Supporting Data Sources */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold text-aurora-blue mb-4 flex items-center gap-2">
+            <span>📍</span> Supporting Data
+          </h2>
+          <div className="space-y-4">
+            {supportingSources.map((source, index) => (
+              <SourceCard key={index} source={source} />
+            ))}
+          </div>
         </div>
 
         {/* Footer Note */}
         <div className="mt-8 bg-indigo-900/20 rounded-xl p-4 border border-indigo-500/20">
-          <p className="text-sm text-gray-300 text-center">
-            <span className="font-semibold">Note:</span> All data sources are free and publicly accessible.
-            Aurora Addict does not store or cache data - all information is fetched in real-time to ensure accuracy.
-          </p>
+          <div className="text-sm text-gray-300 text-center space-y-2">
+            <p>
+              <span className="font-semibold">13 Data Sources</span> • <span className="font-semibold">4 External APIs</span> • <span className="font-semibold">3 Proprietary Algorithms</span>
+            </p>
+            <p>
+              Aurora Addict combines real-time space weather data with advanced aurora science including
+              Newell Coupling, substorm phase detection, and high-resolution Hp30 indices to deliver
+              the most accurate aurora predictions available.
+            </p>
+          </div>
         </div>
       </div>
     </div>

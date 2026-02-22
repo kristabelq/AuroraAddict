@@ -23,6 +23,7 @@ export async function GET() {
             select: {
               id: true,
               name: true,
+              username: true,
               image: true,
             },
           },
@@ -37,10 +38,15 @@ export async function GET() {
           },
           participants: {
             where: {
-              status: "waitlisted",
+              OR: [
+                { status: "waitlisted" },
+                { paymentStatus: "marked_paid", status: "pending" },
+              ],
             },
             select: {
               id: true,
+              status: true,
+              paymentStatus: true,
             },
           },
         },
@@ -63,6 +69,7 @@ export async function GET() {
             select: {
               id: true,
               name: true,
+              username: true,
               image: true,
             },
           },
@@ -77,10 +84,15 @@ export async function GET() {
           },
           participants: {
             where: {
-              status: "waitlisted",
+              OR: [
+                { status: "waitlisted" },
+                { paymentStatus: "marked_paid", status: "pending" },
+              ],
             },
             select: {
               id: true,
+              status: true,
+              paymentStatus: true,
             },
           },
         },
@@ -95,10 +107,17 @@ export async function GET() {
 
     [...createdHunts, ...participantHunts].forEach((hunt) => {
       if (!huntMap.has(hunt.id)) {
+        // Calculate waitlist and pending payment counts separately
+        const waitlistCount = hunt.participants.filter(p => p.status === "waitlisted").length;
+        const pendingPaymentCount = hunt.participants.filter(
+          p => p.paymentStatus === "marked_paid" && p.status === "pending"
+        ).length;
+
         huntMap.set(hunt.id, {
           ...hunt,
           participants: hunt._count.participants,
-          waitlistCount: hunt.participants.length,
+          waitlistCount,
+          pendingPaymentCount,
           isCreator: hunt.userId === session.user.id,
           latitude: hunt.latitude,
           longitude: hunt.longitude,

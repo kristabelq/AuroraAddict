@@ -112,8 +112,15 @@ interface GroupedItems {
 type TabType = "my-chats" | "discover";
 
 export default function ChatsPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+
+  // Redirect if not authenticated
+  if (status === "unauthenticated") {
+    router.push("/auth/signin");
+    return null;
+  }
+
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<TabType>(

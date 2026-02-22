@@ -127,6 +127,7 @@ export async function GET(req: Request) {
         userType: true,
         verificationStatus: true,
         verificationSubmittedAt: true,
+        rejectionReason: true,
         businessLicenseUrl: true,
         idDocumentUrl: true,
         businessDescription: true,
@@ -146,6 +147,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       verificationStatus: user.verificationStatus || "unverified",
       verificationSubmittedAt: user.verificationSubmittedAt,
+      rejectionReason: user.rejectionReason,
       hasSubmittedDocuments:
         !!user.businessLicenseUrl && !!user.idDocumentUrl,
       businessDetails: {

@@ -11,6 +11,7 @@ export default function BusinessVerificationPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [existingData, setExistingData] = useState<any>(null);
 
   const [formData, setFormData] = useState({
@@ -45,6 +46,7 @@ export default function BusinessVerificationPage() {
 
       if (response.ok) {
         setVerificationStatus(data.verificationStatus);
+        setRejectionReason(data.rejectionReason);
         setExistingData(data.businessDetails);
 
         // Populate form with existing data if available
@@ -197,6 +199,9 @@ export default function BusinessVerificationPage() {
     );
   }
 
+  // Show rejection notice with ability to resubmit
+  const showRejectionNotice = verificationStatus === "rejected" && rejectionReason;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black pb-24 px-4 py-8">
       <div className="max-w-2xl mx-auto">
@@ -208,6 +213,27 @@ export default function BusinessVerificationPage() {
             Complete verification to unlock all business features including room type uploads and premium visibility.
           </p>
         </div>
+
+        {/* Rejection Notice */}
+        {showRejectionNotice && (
+          <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">❌</div>
+              <div>
+                <h2 className="text-lg font-semibold text-white mb-2">
+                  Previous Application Rejected
+                </h2>
+                <p className="text-gray-300 mb-2">
+                  Your previous verification request was not approved. Please review the reason below and submit again with corrected information.
+                </p>
+                <div className="bg-red-900/30 rounded-lg p-3 mt-2">
+                  <p className="text-sm font-medium text-red-300">Reason:</p>
+                  <p className="text-white">{rejectionReason}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Business License Upload */}

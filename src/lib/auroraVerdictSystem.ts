@@ -2,6 +2,11 @@
  * Aurora Verdict System - Permutation-Based Probability Calculation
  * Uses 3,125 pre-calculated permutations for scientifically-validated predictions
  * Combines permutation lookup with geomagnetic coordinate calculations
+ *
+ * Enhanced with:
+ * - Hp30 index support (faster response than Kp)
+ * - Newell coupling function integration
+ * - Real magnetometer data support
  */
 
 import {
@@ -12,6 +17,16 @@ import {
 } from "./geomagneticCoordinates";
 
 import { lookupPermutation, AuroraPermutation } from "./auroraPermutations";
+import { calculateNewellCoupling, NewellCouplingResult } from "./newellCoupling";
+
+// Optional enhanced inputs for more accurate predictions
+export interface EnhancedInputs {
+  hp30?: number; // Half-hourly Hp index (more responsive than Kp)
+  hp60?: number; // Hourly Hp index
+  imfBy?: number; // IMF By component for Newell coupling
+  magnetometerDeltaB?: number; // Ground magnetometer reading in nT
+  substormPhase?: "quiet" | "growth" | "onset" | "expansion" | "recovery";
+}
 
 export interface AuroraVerdict {
   // Aurora Physical Properties
@@ -53,6 +68,11 @@ export interface AuroraVerdict {
   likelihood: string;
   latitudeReach: string;
   minLatitude: number; // Deprecated - use minGeomagneticLat instead
+
+  // Enhanced data (when available)
+  newellCoupling?: NewellCouplingResult;
+  hp30Warning?: string | null; // Warning if Hp30 differs from Kp
+  substormBoost?: number; // Additional confidence from magnetometer data
 }
 
 // Parameter classification functions
@@ -101,16 +121,92 @@ function classifyDensity(density: number): string {
 /**
  * Calculate aurora verdict based on current space weather parameters
  * Uses 3,125 pre-calculated permutations for scientifically-accurate predictions
+ *
+ * @param kp - Kp index (0-9)
+ * @param bz - IMF Bz component (nT, negative = southward)
+ * @param bt - Total IMF magnitude (nT)
+ * @param speed - Solar wind speed (km/s)
+ * @param density - Solar wind density (particles/cm³)
+ * @param enhanced - Optional enhanced inputs for more accurate predictions
  */
 export function calculateAuroraVerdict(
   kp: number,
   bz: number,
   bt: number,
   speed: number,
-  density: number
+  density: number,
+  enhanced?: EnhancedInputs
 ): AuroraVerdict {
+  // Enhanced Hp30 weighting based on substorm phase
+  // Hp30 is more responsive (30-min resolution) vs Kp (3-hour average)
+  // During growth/onset phases, Hp30 is more reliable for real-time activity
+  let effectiveKp: number;
+  let hp30Warning: string | null = null;
+
+  if (enhanced?.hp30 !== undefined) {
+    const isActivePhase = enhanced.substormPhase === "growth" ||
+                         enhanced.substormPhase === "onset" ||
+                         enhanced.substormPhase === "expansion";
+
+    if (isActivePhase) {
+      // During active phases, weight Hp30 1.5x more than Kp
+      // This better reflects real-time conditions when activity is changing rapidly
+      const hp30Weight = 1.5;
+      const kpWeight = 1.0;
+      effectiveKp = (enhanced.hp30 * hp30Weight + kp * kpWeight) / (hp30Weight + kpWeight);
+
+      // Generate alert for Hp30 surge (indicator of rapid activity increase)
+      if (enhanced.hp30 > kp + 2) {
+        hp30Warning = `⚠️ Hp30 SURGE: ${enhanced.hp30.toFixed(1)} vs Kp ${kp.toFixed(1)} - Activity is increasing rapidly! Kp will catch up soon.`;
+      } else if (enhanced.hp30 > kp + 1) {
+        hp30Warning = `Hp30 is rising faster than Kp (${enhanced.hp30.toFixed(1)} vs ${kp.toFixed(1)}) - conditions improving`;
+      }
+    } else {
+      // During quiet/recovery, use Hp30 directly if available
+      effectiveKp = enhanced.hp30;
+
+      // Standard difference warning
+      if (Math.abs(enhanced.hp30 - kp) >= 2) {
+        hp30Warning = enhanced.hp30 > kp
+          ? `Hp30 is higher (${enhanced.hp30.toFixed(1)}) - activity may be increasing faster than Kp shows`
+          : `Hp30 is lower (${enhanced.hp30.toFixed(1)}) - activity may be decreasing`;
+      }
+    }
+  } else {
+    effectiveKp = kp;
+  }
+
+  // Calculate Newell coupling function for additional insight
+  let newellCoupling: NewellCouplingResult | undefined;
+  if (enhanced?.imfBy !== undefined) {
+    newellCoupling = calculateNewellCoupling({
+      solarWindSpeed: speed,
+      imfBz: bz,
+      imfBy: enhanced.imfBy,
+      imfBt: bt,
+    });
+  }
+
+  // Substorm boost - magnetometer data can increase confidence
+  let substormBoost = 0;
+  if (enhanced?.magnetometerDeltaB) {
+    if (enhanced.magnetometerDeltaB >= 500) {
+      substormBoost = 20; // Strong substorm activity
+    } else if (enhanced.magnetometerDeltaB >= 300) {
+      substormBoost = 15; // Moderate substorm
+    } else if (enhanced.magnetometerDeltaB >= 100) {
+      substormBoost = 10; // Minor substorm
+    }
+  }
+
+  // Add boost for active substorm phases
+  if (enhanced?.substormPhase === "expansion") {
+    substormBoost = Math.max(substormBoost, 25);
+  } else if (enhanced?.substormPhase === "onset") {
+    substormBoost = Math.max(substormBoost, 15);
+  }
   // STEP 1: Classify parameters into levels
-  const kpLevel = classifyKp(kp);
+  const kpLevel = classifyKp(effectiveKp);
   const bzLevel = classifyBz(bz);
   const btLevel = classifyBt(bt);
   const speedLevel = classifySpeed(speed);
@@ -120,7 +216,7 @@ export function calculateAuroraVerdict(
   const permutation = lookupPermutation(kpLevel, bzLevel, btLevel, speedLevel, densityLevel);
 
   // STEP 3: Calculate Auroral Oval Position using Geomagnetic Coordinates
-  const ovalPosition = getAuroralOvalLatitude(kp);
+  const ovalPosition = getAuroralOvalLatitude(effectiveKp);
 
   // STEP 4: Determine which reference cities can see aurora
   const exampleCities = REFERENCE_CITIES.filter((city) => {
@@ -128,7 +224,7 @@ export function calculateAuroraVerdict(
       city.geographicLat,
       city.geographicLon
     );
-    const visibility = calculateAuroraVisibility(geomagneticLat, kp);
+    const visibility = calculateAuroraVisibility(geomagneticLat, effectiveKp);
     return visibility.isVisible && visibility.quality !== "none";
   })
     .slice(0, 5)
@@ -151,7 +247,17 @@ export function calculateAuroraVerdict(
   const minGeomagneticLat = parseLatitudeReach(permutation.latitudeReach, ovalPosition.equatorwardEdge);
 
   // Determine certainty based on physics flag
-  const certainty = parseCertainty(permutation.physicsFlag, permutation.physicsNotes, kp, bz, speed);
+  let certainty = parseCertainty(permutation.physicsFlag, permutation.physicsNotes, effectiveKp, bz, speed);
+
+  // Apply substorm boost to certainty
+  if (substormBoost > 0) {
+    certainty = Math.min(100, certainty + substormBoost);
+  }
+
+  // Apply Newell coupling boost
+  if (newellCoupling && newellCoupling.isFavorable) {
+    certainty = Math.min(100, certainty + 5);
+  }
 
   // Generate visibility range description
   const visibilityRange = intensityScore > 10
@@ -205,6 +311,11 @@ export function calculateAuroraVerdict(
     likelihood,
     latitudeReach: visibilityRange,
     minLatitude: minGeomagneticLat,
+
+    // Enhanced data (when available)
+    newellCoupling,
+    hp30Warning,
+    substormBoost: substormBoost > 0 ? substormBoost : undefined,
   };
 }
 

@@ -288,7 +288,7 @@ export default function EditProfilePage() {
                         setFormData({ ...formData, instagram: e.target.value })
                       }
                       className="w-full bg-white/10 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-aurora-green"
-                      placeholder="yourusername"
+                      placeholder="instagram_handle"
                     />
                   </div>
                 </div>
@@ -343,112 +343,91 @@ export default function EditProfilePage() {
             </button>
           </form>
 
-          {/* Business Account Section */}
-          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border-2 border-amber-500/30">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="p-2 bg-amber-500/20 rounded-lg">
-                <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
+          {/* Business Account Section - Only show for business accounts */}
+          {userType === "business" && (
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border-2 border-amber-500/30">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="p-2 bg-amber-500/20 rounded-lg">
+                  <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-xl font-semibold text-white">Business Account</h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Manage your business verification and settings
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <h2 className="text-xl font-semibold text-white">Business Account</h2>
-                <p className="text-sm text-gray-400 mt-1">
-                  Upgrade to a business account to create and manage business chats
-                </p>
-              </div>
-            </div>
 
-            {userType === "personal" && verificationStatus === "unverified" ? (
-              <div>
-                <div className="bg-white/5 rounded-lg p-4 mb-4">
-                  <h3 className="text-white font-medium mb-2">Why upgrade to business?</h3>
-                  <ul className="space-y-2 text-sm text-gray-300">
-                    <li className="flex items-start gap-2">
-                      <svg className="w-5 h-5 text-aurora-green flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      <span>Create and manage your own business chats</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <svg className="w-5 h-5 text-aurora-green flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      <span>Engage directly with aurora hunters in your area</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <svg className="w-5 h-5 text-aurora-green flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      <span>Verified badge on your profile and chats</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <svg className="w-5 h-5 text-aurora-green flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      <span>Both public and private chat options</span>
-                    </li>
-                  </ul>
+              {verificationStatus === "pending" ? (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                    <h3 className="text-white font-medium">Verification Pending</h3>
+                  </div>
+                  <p className="text-sm text-gray-300">
+                    Your business verification request is being reviewed by our admin team.
+                    We'll notify you once it's processed (usually within 24-48 hours).
+                  </p>
                 </div>
-                <button
-                  onClick={() => router.push("/profile/business-upgrade")}
-                  className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                  Upgrade to Business Account
-                </button>
-              </div>
-            ) : verificationStatus === "pending" ? (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
-                  <h3 className="text-white font-medium">Verification Pending</h3>
+              ) : verificationStatus === "verified" ? (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <h3 className="text-white font-medium">Business Verified ✓</h3>
+                  </div>
+                  <p className="text-sm text-gray-300 mb-3">
+                    {businessName && <strong>{businessName}</strong>} is verified and ready to create business chats!
+                  </p>
+                  <button
+                    onClick={() => router.push("/business/subscriptions")}
+                    className="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white py-2.5 rounded-lg font-medium hover:from-green-600 hover:to-blue-600 transition-colors"
+                  >
+                    Manage Business Chats
+                  </button>
                 </div>
-                <p className="text-sm text-gray-300">
-                  Your business verification request is being reviewed by our admin team.
-                  We'll notify you once it's processed (usually within 24-48 hours).
-                </p>
-              </div>
-            ) : verificationStatus === "verified" ? (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <h3 className="text-white font-medium">Business Verified ✓</h3>
+              ) : verificationStatus === "rejected" ? (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    <h3 className="text-white font-medium">Verification Rejected</h3>
+                  </div>
+                  <p className="text-sm text-gray-300 mb-3">
+                    Unfortunately, your business verification was not approved. You can submit a new application with updated information.
+                  </p>
+                  <button
+                    onClick={() => router.push("/business/verification")}
+                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-2.5 rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transition-colors"
+                  >
+                    Reapply for Verification
+                  </button>
                 </div>
-                <p className="text-sm text-gray-300 mb-3">
-                  {businessName && <strong>{businessName}</strong>} is verified and ready to create business chats!
-                </p>
-                <button
-                  onClick={() => router.push("/business/subscriptions")}
-                  className="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white py-2.5 rounded-lg font-medium hover:from-green-600 hover:to-blue-600 transition-colors"
-                >
-                  Manage Business Chats
-                </button>
-              </div>
-            ) : verificationStatus === "rejected" ? (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                  <h3 className="text-white font-medium">Verification Rejected</h3>
+              ) : (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <h3 className="text-white font-medium">Verification Required</h3>
+                  </div>
+                  <p className="text-sm text-gray-300 mb-3">
+                    Complete your business verification to unlock all business features.
+                  </p>
+                  <button
+                    onClick={() => router.push("/business/verification")}
+                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-2.5 rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transition-colors"
+                  >
+                    Complete Verification
+                  </button>
                 </div>
-                <p className="text-sm text-gray-300 mb-3">
-                  Unfortunately, your business verification was not approved. You can submit a new application with updated information.
-                </p>
-                <button
-                  onClick={() => router.push("/profile/business-upgrade")}
-                  className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-2.5 rounded-lg font-medium hover:from-amber-600 hover:to-orange-600 transition-colors"
-                >
-                  Reapply for Verification
-                </button>
-              </div>
-            ) : null}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Business Management Section - Only for Verified Businesses */}
           {userType === "business" && verificationStatus === "verified" && (

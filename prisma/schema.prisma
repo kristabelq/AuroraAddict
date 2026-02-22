@@ -122,6 +122,10 @@ model User {
   reviewResponses   ReviewResponse[] @relation("ReviewResponses") // Responses to reviews
   reviewHelpfulVotes ReviewHelpful[] @relation("ReviewHelpfulVotes") // Helpful votes cast
 
+  // Advanced Aurora Forecasting relations
+  locationPreference UserLocationPreference?
+  quickSightings    QuickSighting[]
+
   // Affiliate Performance (for business accounts)
   totalAffiliateClicks       Int      @default(0)
   totalConversions           Int      @default(0)
@@ -886,4 +890,210 @@ model CTAVariant {
   @@index([businessId, isActive])
   @@index([serviceType])
   @@index([isActive, startDate])
+}
+
+// ============================================
+// ADVANCED AURORA FORECASTING MODELS
+// ============================================
+
+model UserLocationPreference {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  latitude              Float
+  longitude             Float
+  cityName              String
+  alertsEnabled         Boolean  @default(false)
+  notificationThreshold Float    @default(4.0) // Kp threshold for alerts
+  emailAlerts           Boolean  @default(false)
+  pushAlerts            Boolean  @default(true)
+
+  // Alert frequency settings
+  maxAlertsPerDay       Int      @default(5)
+  quietHoursStart       Int?     // Hour in 24h format (e.g., 8 for 8 AM)
+  quietHoursEnd         Int?     // Hour in 24h format (e.g., 22 for 10 PM)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MagnetometerReading {
+  id          String   @id @default(cuid())
+  stationCode String   // Station identifier (e.g., "TRO", "ABK", "LYR")
+  stationName String?  // Human-readable station name
+  network     String?  // Network name (e.g., "IMAGE", "CANMOS", "THEMIS")
+  timestamp   DateTime
+
+  // Magnetic field components (nanoTesla)
+  bx          Float?   // Geographic north component
+  by          Float?   // Geographic east component
+  bz          Float?   // Vertical component
+  deltaB      Float    // Total perturbation magnitude in nT
+
+  // Station location
+  latitude    Float?
+  longitude   Float?
+  geomagLat   Float?   // Geomagnetic latitude
+
+  createdAt   DateTime @default(now())
+
+  @@unique([stationCode, timestamp])
+  @@index([stationCode, timestamp])
+  @@index([timestamp])
+  @@index([network])
+}
+
+model SubstormEvent {
+  id              String   @id @default(cuid())
+  onsetTime       DateTime // When substorm onset was detected
+  peakTime        DateTime? // When peak was reached
+  recoveryTime    DateTime? // When recovery phase began
+  endTime         DateTime? // When substorm ended
+
+  peakDeltaB      Float    // Maximum perturbation in nT
+  phase           String   // 'onset' | 'expansion' | 'recovery' | 'ended'
+
+  // Detection metadata
+  confidence      Float    // 0-1 confidence score
+  detectionMethod String   @default("magnetometer") // 'magnetometer' | 'auroral_power' | 'combined'
+
+  // Geographic extent
+  mlat            Float?   // Magnetic latitude of onset
+  mlt             Float?   // Magnetic local time of onset
+
+  // Source stations
+  sourceStations  String[] // Station codes that detected the substorm
+
+  // Related data
+  kpAtOnset       Float?   // Kp index at onset time
+  bzAtOnset       Float?   // Bz component at onset time
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([onsetTime])
+  @@index([phase])
+  @@index([confidence])
+}
+
+model QuickSighting {
+  id        String   @id @default(cuid())
+  userId    String
+  latitude  Float
+  longitude Float
+  cityName  String?  // Reverse geocoded city name
+  countryCode String? // ISO country code
+
+  timestamp DateTime @default(now())
+  intensity Int      // 1-5 scale (1=faint, 5=very bright)
+
+  // Optional additional data
+  colors    String[] // Observed colors (green, purple, red, etc.)
+  structure String?  // 'arc' | 'band' | 'corona' | 'diffuse' | 'pulsating'
+  direction String?  // Cardinal direction where aurora was seen
+
+  // Automatic expiration (2 hours after creation)
+  expiresAt DateTime
+
+  // Verification
+  isVerified Boolean @default(false) // Verified by photo or multiple users
+  verifiedBy String? // User ID who verified (if applicable)
+
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([timestamp])
+  @@index([expiresAt])
+  @@index([latitude, longitude])
+  @@index([userId, timestamp])
+}
+
+model CameraNetwork {
+  id            String   @id @default(cuid())
+  networkCode   String   @unique // e.g., "THEMIS", "MIRACLE", "TROMSO"
+  networkName   String   // Human-readable name
+  region        String   // Geographic region covered
+
+  // API/Feed information
+  apiEndpoint   String?  // API URL if available
+  feedUrl       String?  // Image feed URL
+  updateFrequency Int    @default(60) // Seconds between updates
+
+  // Status
+  isActive      Boolean  @default(true)
+  lastCheckTime DateTime?
+  lastStatus    String?  // 'online' | 'offline' | 'degraded'
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  stations      CameraStation[]
+}
+
+model CameraStation {
+  id            String   @id @default(cuid())
+  networkId     String
+  stationCode   String   // e.g., "FSIM", "GILL", "RANK"
+  stationName   String   // Human-readable name
+
+  latitude      Float
+  longitude     Float
+
+  // Camera specifications
+  fieldOfView   Float?   // Degrees
+  elevation     Float?   // Meters above sea level
+
+  // Feed information
+  imageUrl      String?  // Current image URL
+  videoUrl      String?  // Video stream URL if available
+
+  // Status
+  isActive      Boolean  @default(true)
+  lastImageTime DateTime?
+  currentStatus String   @default("unknown") // 'clear' | 'cloudy' | 'aurora' | 'offline' | 'unknown'
+
+  // Aurora detection
+  auroraDetected Boolean @default(false)
+  auroraConfidence Float? // 0-1 confidence of aurora detection
+  lastAuroraTime DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  network       CameraNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+  @@unique([networkId, stationCode])
+  @@index([latitude, longitude])
+  @@index([auroraDetected])
+}
+
+model ForecastEntry {
+  id            String   @id @default(cuid())
+  forecastTime  DateTime // The time this forecast is for
+  generatedAt   DateTime // When the forecast was generated
+  source        String   // 'gfz' | 'noaa' | 'internal'
+
+  // Predicted values
+  predictedKp   Float
+  predictedKpMin Float?  // Lower bound of prediction
+  predictedKpMax Float?  // Upper bound of prediction
+
+  // Confidence and uncertainty
+  confidence    Float    // 0-1 confidence score
+  uncertainty   Float?   // Standard deviation or similar
+
+  // Additional predictions
+  predictedBz   Float?
+  predictedSpeed Float?
+
+  // Source metadata
+  modelVersion  String?  // Version of the prediction model
+
+  createdAt     DateTime @default(now())
+
+  @@unique([forecastTime, source])
+  @@index([forecastTime])
+  @@index([source])
 }

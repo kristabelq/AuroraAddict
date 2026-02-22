@@ -127,20 +127,32 @@ export async function POST(
       // Edge Case: Update hunt transition status
       await updateHuntTransitionStatus(huntId);
 
+      // Build appropriate message for private hunts
+      let message: string;
+      if (isAtCapacity) {
+        message = `Added to waitlist (position #${waitlistPosition})! You'll be notified if a spot opens up. This will expire on ${expirationDate.toLocaleString()}.`;
+      } else if (hunt.isPaid) {
+        message = `Request sent! This is a paid private hunt ($${hunt.price}). Please pay the organizer directly and mark your payment as complete. The organizer will confirm your spot once they verify payment. This request will expire on ${expirationDate.toLocaleString()} if not approved.`;
+      } else {
+        message = `Request sent! Waiting for organizer approval. This request will expire on ${expirationDate.toLocaleString()} if not approved.`;
+      }
+
       return NextResponse.json({
         success: true,
         participant: participantData,
         requiresApproval: !isAtCapacity,
+        requiresPayment: hunt.isPaid,
         isWaitlisted: isAtCapacity,
         expiresAt: expirationDate.toISOString(),
         waitlistPosition,
-        message: isAtCapacity
-          ? `Added to waitlist (position #${waitlistPosition})! You'll be notified if a spot opens up. This will expire on ${expirationDate.toLocaleString()}.`
-          : `Request sent! Waiting for organizer approval. This request will expire on ${expirationDate.toLocaleString()} if not approved.`,
+        price: hunt.isPaid ? hunt.price : undefined,
+        message,
       });
     }
 
-    // For paid hunts, require payment checkout or add to waitlist if at capacity
+    // For paid hunts - create with "pending" status and track payment
+    // Note: Platform tracks payment status but does NOT process actual payments
+    // Users pay organizer directly (WhatsApp, bank transfer, etc.) and mark as paid
     if (hunt.isPaid && hunt.price) {
       const status = isAtCapacity ? "waitlisted" : "pending";
 
@@ -180,13 +192,14 @@ export async function POST(
       return NextResponse.json({
         success: true,
         participant: participantData,
-        requiresPayment: !isAtCapacity,
+        requiresPayment: true,
         isWaitlisted: isAtCapacity,
         expiresAt: expirationDate.toISOString(),
         waitlistPosition,
+        price: hunt.price,
         message: isAtCapacity
           ? `Added to waitlist (position #${waitlistPosition})! You'll be notified if a spot opens up. This will expire on ${expirationDate.toLocaleString()}.`
-          : `Proceed to payment to confirm your spot. Payment must be completed by ${expirationDate.toLocaleString()} or your reservation will be cancelled.`,
+          : `Joined! Please pay $${hunt.price} directly to the organizer and mark your payment as complete. Your spot will be confirmed once the organizer verifies payment.`,
       });
     }
 

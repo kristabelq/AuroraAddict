@@ -101,6 +101,14 @@ export async function GET() {
     return NextResponse.json(huntsWithSuccessRate);
   } catch (error) {
     console.error("Error fetching upcoming hunts:", error);
+    // In development, show database connection errors clearly
+    if (process.env.NODE_ENV === 'development') {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      if (message.includes("Can't reach database") || message.includes("Tenant or user not found")) {
+        console.error("\n⚠️  Database connection failed. Your network may be blocking PostgreSQL ports.");
+        console.error("Try: 1) Different network (mobile hotspot) 2) Check Supabase connection string\n");
+      }
+    }
     return NextResponse.json([]);
   }
 }

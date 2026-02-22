@@ -62,6 +62,15 @@ export async function POST(
       );
     }
 
+    // For paid hunts, check if payment has been confirmed
+    // If payment is still pending/marked_paid, don't auto-confirm - use payment confirmation flow instead
+    if (hunt.isPaid && participant.paymentStatus !== "confirmed") {
+      return NextResponse.json(
+        { error: "This is a paid hunt. Please use the payment confirmation flow to confirm participants after they've marked payment." },
+        { status: 400 }
+      );
+    }
+
     // Update status to confirmed and clear expiration
     const updatedParticipant = await prisma.huntParticipant.update({
       where: {
@@ -72,6 +81,7 @@ export async function POST(
       },
       data: {
         status: "confirmed",
+        paymentStatus: hunt.isPaid ? "confirmed" : null, // Ensure payment status is synced
         requestExpiresAt: null, // Clear expiration when confirmed
       },
     });

@@ -1,6 +1,5 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import TimeHeader from "@/components/TimeHeader";
@@ -19,23 +18,9 @@ interface CelestialEvent {
 }
 
 export default function CelestialEventsPage() {
-  const { data: session, status } = useSession();
   const router = useRouter();
   const [events, setEvents] = useState<CelestialEvent[]>([]);
   const [filter, setFilter] = useState<string>("all");
-
-  useEffect(() => {
-    if (status === "loading") return;
-
-    if (status === "unauthenticated") {
-      router.push("/auth/signin");
-      return;
-    }
-
-    if (session?.user && !session.user.onboardingComplete) {
-      router.push("/onboarding");
-    }
-  }, [session, status, router]);
 
   useEffect(() => {
     loadCelestialEvents();
@@ -251,17 +236,6 @@ export default function CelestialEventsPage() {
   const filteredEvents = filter === "all"
     ? events
     : events.filter(e => e.type === filter);
-
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-[#0f1420] text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-purple-500 border-t-transparent"></div>
-          <p className="text-gray-300 mt-4">Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#0f1420] text-white">
