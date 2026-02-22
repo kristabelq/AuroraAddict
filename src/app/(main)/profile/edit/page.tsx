@@ -6,6 +6,8 @@ import { useSession } from "next-auth/react";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import UsernameSettings from "@/components/profile/UsernameSettings";
+import ImageCropper from "@/components/ImageCropper";
+import { uploadImageToSupabase } from "@/lib/supabase/client-upload";
 
 export default function EditProfilePage() {
   const router = useRouter();
@@ -26,6 +28,8 @@ export default function EditProfilePage() {
   const [userType, setUserType] = useState<string>("personal");
   const [verificationStatus, setVerificationStatus] = useState<string>("unverified");
   const [businessName, setBusinessName] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -81,37 +85,68 @@ export default function EditProfilePage() {
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size should be less than 5MB");
-      return;
-    }
+    // No size restriction - accept any size, we'll compress it
 
-    // Show preview
+    // Show cropper
     const reader = new FileReader();
     reader.onloadend = () => {
-      setPreviewImage(reader.result as string);
+      setImageToCrop(reader.result as string);
+      setShowCropper(true);
     };
     reader.readAsDataURL(file);
 
-    // Upload image
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setShowCropper(false);
     setUploadingImage(true);
-    const imageFormData = new FormData();
-    imageFormData.append("image", file);
 
     try {
-      const response = await fetch("/api/user/profile/image", {
-        method: "POST",
-        body: imageFormData,
+      // Create preview
+      const previewUrl = URL.createObjectURL(croppedBlob);
+      setPreviewImage(previewUrl);
+
+      // Convert blob to File
+      const croppedFile = new File([croppedBlob], "profile.jpg", {
+        type: "image/jpeg",
       });
 
-      const data = await response.json();
+      // Upload to Supabase Storage with automatic compression
+      if (!session?.user?.id) {
+        toast.error("Please sign in to upload");
+        return;
+      }
+
+      const uploadResult = await uploadImageToSupabase(
+        croppedFile,
+        "profiles",
+        session.user.id
+      );
+
+      if (!uploadResult) {
+        toast.error("Failed to upload image");
+        setPreviewImage(null);
+        return;
+      }
+
+      // Update profile with new image URL
+      const response = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image: uploadResult.url,
+        }),
+      });
 
       if (response.ok) {
-        setFormData({ ...formData, image: data.imageUrl });
+        setFormData({ ...formData, image: uploadResult.url });
         toast.success("Profile image updated!");
       } else {
-        toast.error(data.error || "Failed to upload image");
+        toast.error("Failed to update profile image");
         setPreviewImage(null);
       }
     } catch (error) {
@@ -121,6 +156,11 @@ export default function EditProfilePage() {
     } finally {
       setUploadingImage(false);
     }
+  };
+
+  const handleCropCancel = () => {
+    setShowCropper(false);
+    setImageToCrop(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -556,6 +596,17 @@ export default function EditProfilePage() {
           </button>
         </div>
       </div>
+
+      {/* Image Cropper Modal */}
+      {showCropper && imageToCrop && (
+        <ImageCropper
+          image={imageToCrop}
+          onCropComplete={handleCropComplete}
+          onCancel={handleCropCancel}
+          aspect={1}
+          shape="round"
+        />
+      )}
     </div>
   );
 }
