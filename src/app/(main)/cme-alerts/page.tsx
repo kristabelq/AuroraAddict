@@ -47,9 +47,9 @@ export default function CMEAlertsPage() {
     try {
       setError(null);
 
-      // Fetch from our cached API endpoint
+      // Fetch from our database records API (auto-refreshes if >30min stale)
       const response = await fetch(
-        `/api/space-weather/cme-cached${forceRefresh ? "?forceRefresh=true" : ""}`
+        `/api/space-weather/cme-records${forceRefresh ? "?forceRefresh=true" : ""}`
       );
 
       if (!response.ok) {
@@ -59,16 +59,38 @@ export default function CMEAlertsPage() {
 
       const result = await response.json();
 
-      setCmeList(result.data || []);
-      setLastUpdate(new Date(result.lastUpdated));
+      // Convert CMERecord format to CMEData format for backwards compatibility
+      const formattedCMEs = result.records.map((record: any) => ({
+        activityID: record.activityID,
+        startTime: record.startTime,
+        sourceLocation: record.sourceLocation,
+        note: record.note,
+        cmeAnalyses: [
+          {
+            latitude: record.latitude,
+            longitude: record.longitude,
+            halfAngle: record.halfAngle,
+            speed: record.speed,
+            type: record.type,
+            isMostAccurate: record.isMostAccurate,
+            enlilList: record.estimatedArrival
+              ? [
+                  {
+                    estimatedShockArrivalTime: record.estimatedArrival,
+                    estimatedDuration: record.estimatedDuration,
+                    kpIndex: record.kpIndex,
+                  },
+                ]
+              : [],
+          },
+        ],
+      }));
+
+      setCmeList(formattedCMEs);
+      setLastUpdate(result.lastFetched ? new Date(result.lastFetched) : new Date());
       setCacheAgeMinutes(result.cacheAgeMinutes || 0);
       setIsFresh(result.fresh !== false);
       setLoading(false);
-
-      // Show warning if data is stale
-      if (result.warning) {
-        console.warn("CME data warning:", result.warning);
-      }
     } catch (error) {
       console.error("Error fetching CME data:", error);
       setError(error instanceof Error ? error.message : "Failed to load CME data");

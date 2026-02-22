@@ -1114,3 +1114,35 @@ model SpaceWeatherCache {
   @@index([dataType])
   @@index([expiresAt])
 }
+
+// Individual CME records for historical tracking and analytics
+model CMERecord {
+  id                String   @id @default(cuid())
+  activityID        String   @unique // NASA DONKI activity ID
+  startTime         DateTime // When the CME was first observed
+  sourceLocation    String?  // Location on the sun
+  latitude          Float?
+  longitude         Float?
+  halfAngle         Float?   // Angular width
+  speed             Float?   // km/s
+  type              String?  // Analysis type
+  isEarthDirected   Boolean  @default(false)
+  isMostAccurate    Boolean  @default(false)
+
+  // ENLIL model predictions
+  estimatedArrival  DateTime?
+  estimatedDuration Int?     // hours
+  kpIndex           Float?
+
+  // Metadata
+  note              String?  @db.Text
+  rawData           Json     // Full JSON from NASA API
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([startTime])
+  @@index([isEarthDirected])
+  @@index([speed])
+  @@index([estimatedArrival])
+}
