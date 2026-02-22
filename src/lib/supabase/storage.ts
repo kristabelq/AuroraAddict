@@ -44,10 +44,11 @@ export async function uploadImage(
 
   // Convert File to Buffer if needed
   let buffer: Buffer
-  if (file instanceof Buffer) {
+  if (Buffer.isBuffer(file)) {
     buffer = file
   } else {
-    const bytes = await file.arrayBuffer()
+    // File type - convert to Buffer
+    const bytes = await (file as File).arrayBuffer()
     buffer = Buffer.from(bytes)
   }
 
