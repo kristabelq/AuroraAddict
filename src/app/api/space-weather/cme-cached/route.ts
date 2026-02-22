@@ -21,9 +21,13 @@ export async function GET(req: Request) {
       },
     });
 
-    // If no cache or expired or force refresh, trigger update
-    if (!cache || cache.expiresAt < new Date() || forceRefresh) {
-      console.log("[CME Cache] Cache miss or expired, triggering update...");
+    // Smart refresh logic for CME data
+    const now = new Date();
+    const cacheAge = cache ? (now.getTime() - new Date(cache.lastUpdated).getTime()) / (1000 * 60) : Infinity; // age in minutes
+    const shouldRefresh = !cache || forceRefresh || cacheAge > 30; // Refresh if >30 min old or forced
+
+    if (shouldRefresh) {
+      console.log(`[CME Cache] Refreshing (age: ${cacheAge.toFixed(0)}min, forced: ${forceRefresh})`);
 
       // Try to update the cache
       try {
@@ -46,6 +50,7 @@ export async function GET(req: Request) {
           return NextResponse.json({
             data: cache.data,
             lastUpdated: cache.lastUpdated,
+            cacheAgeMinutes: cacheAge,
             warning: "Failed to refresh, returning stale data",
             error: error instanceof Error ? error.message : "Unknown error",
           });
@@ -69,11 +74,12 @@ export async function GET(req: Request) {
       );
     }
 
-    // Return cached data
+    // Return cached data with freshness info
     return NextResponse.json({
       data: cache.data,
       lastUpdated: cache.lastUpdated,
-      expiresAt: cache.expiresAt,
+      cacheAgeMinutes: Math.floor(cacheAge),
+      fresh: cacheAge < 30, // Data is "fresh" if less than 30 minutes old
       cached: true,
     });
   } catch (error) {
@@ -110,7 +116,7 @@ async function updateCMECache() {
   const data = await response.json();
 
   const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 2); // Expire in 2 hours
+  expiresAt.setHours(expiresAt.getHours() + 24); // Reference expiration (not actively used)
 
   await prisma.spaceWeatherCache.upsert({
     where: {

@@ -33,11 +33,13 @@ export default function CMEAlertsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [cacheAgeMinutes, setCacheAgeMinutes] = useState<number>(0);
+  const [isFresh, setIsFresh] = useState<boolean>(true);
 
   useEffect(() => {
     fetchCMEData();
-    // Check for updates every 10 minutes (cache auto-refreshes if expired)
-    const interval = setInterval(() => fetchCMEData(), 10 * 60 * 1000);
+    // Check for updates every 2 minutes (data auto-refreshes if >30min old)
+    const interval = setInterval(() => fetchCMEData(), 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -59,6 +61,8 @@ export default function CMEAlertsPage() {
 
       setCmeList(result.data || []);
       setLastUpdate(new Date(result.lastUpdated));
+      setCacheAgeMinutes(result.cacheAgeMinutes || 0);
+      setIsFresh(result.fresh !== false);
       setLoading(false);
 
       // Show warning if data is stale
@@ -240,7 +244,9 @@ export default function CMEAlertsPage() {
               <div className="text-right">
                 <div className="text-xs text-gray-500">Last updated</div>
                 <div className="text-sm text-gray-400">{formatTime(lastUpdate.toISOString())}</div>
-                <div className="text-xs text-green-400">📦 Cached data</div>
+                <div className={`text-xs ${isFresh ? "text-green-400" : "text-yellow-400"}`}>
+                  {isFresh ? "✓ Fresh" : `⚠ ${cacheAgeMinutes}min old`} • Auto-refreshes every 30min
+                </div>
               </div>
               <button
                 onClick={() => {

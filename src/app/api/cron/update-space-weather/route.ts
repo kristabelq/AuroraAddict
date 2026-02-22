@@ -69,7 +69,7 @@ async function updateCMECache() {
 
     // Cache the data (upsert - update if exists, create if not)
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 2); // Expire in 2 hours
+    expiresAt.setHours(expiresAt.getHours() + 24); // Reference expiration (actual refresh based on age)
 
     await prisma.spaceWeatherCache.upsert({
       where: {
