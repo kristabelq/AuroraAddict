@@ -30,16 +30,14 @@ export default function SolarWindPage() {
 
   const fetchSolarWindData = async () => {
     try {
-      // Fetch real-time solar wind magnetic field data from NOAA
-      const magResponse = await fetch(
-        "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json"
-      );
+      // Fetch real-time solar wind magnetic field data via our API route, which
+      // normalizes NOAA's current /json/rtsw feeds back to the legacy
+      // array-of-arrays shape this page parses.
+      const magResponse = await fetch("/api/space-weather/solar-wind");
       const magData = await magResponse.json();
 
       // Fetch real-time solar wind plasma data (speed, density)
-      const plasmaResponse = await fetch(
-        "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json"
-      );
+      const plasmaResponse = await fetch("/api/space-weather/plasma");
       const plasmaData = await plasmaResponse.json();
 
       // Remove header row

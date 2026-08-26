@@ -63,58 +63,74 @@ interface HpIndexResponse {
 }
 
 async function fetchHpIndex(): Promise<HpIndexResponse> {
-  // GFZ Potsdam Hp Index API
-  // This fetches the most recent Hp30/Hp60 values
-  const now = new Date();
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  // GFZ moved from kp.gfz-potsdam.de to kp.gfz.de and no longer serves the old
+  // JSON endpoint. The current Hp30 nowcast is published as a whitespace-
+  // delimited text file. Columns:
+  //   YYYY MM DD hh.h hh._m days days_m Hp30 ap30 D
+  // Not-yet-available half-hours are filled with Hp30 = -1.000.
+  const nowcastUrl = "https://kp.gfz.de/app/files/Hp30_ap30_nowcast.txt";
 
-  // Format dates for GFZ API (YYYY-MM-DD format)
-  const startDate = yesterday.toISOString().split("T")[0];
-  const endDate = now.toISOString().split("T")[0];
-
-  // GFZ API endpoint for Hp30 data
-  const apiUrl = `https://kp.gfz-potsdam.de/app/json/?start=${startDate}&end=${endDate}&index=Hp30`;
-
-  const response = await fetch(apiUrl, {
+  const response = await fetch(nowcastUrl, {
     headers: {
-      Accept: "application/json",
       "User-Agent": "AuroraAddict/1.0 (aurora-forecasting)",
     },
     next: { revalidate: 900 }, // 15 minutes
   });
 
   if (!response.ok) {
-    // If GFZ API is unavailable, try to derive from NOAA Kp
-    console.warn("GFZ API unavailable, using Kp-derived estimate");
+    // If GFZ is unavailable, try to derive from NOAA Kp
+    console.warn("GFZ nowcast unavailable, using Kp-derived estimate");
     return await deriveFromKp();
   }
 
-  const rawData: GFZResponse[] = await response.json();
+  const text = await response.text();
 
-  if (!Array.isArray(rawData) || rawData.length === 0) {
+  const history: HpDataPoint[] = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const cols = trimmed.split(/\s+/);
+    if (cols.length < 9) continue;
+
+    const hp30 = parseFloat(cols[7]);
+    const ap30 = parseInt(cols[8], 10);
+    // Skip placeholder rows for future half-hours (no data yet).
+    if (!isFinite(hp30) || hp30 < 0) continue;
+
+    const year = cols[0];
+    const month = cols[1].padStart(2, "0");
+    const day = cols[2].padStart(2, "0");
+    // cols[3] is the interval start hour as a decimal (e.g. "23.5" -> 23:30).
+    const startHour = parseFloat(cols[3]);
+    const hh = Math.floor(startHour).toString().padStart(2, "0");
+    const mm = Math.round((startHour - Math.floor(startHour)) * 60)
+      .toString()
+      .padStart(2, "0");
+
+    history.push({
+      time: `${year}-${month}-${day}T${hh}:${mm}:00Z`,
+      Hp30: hp30,
+      Hp60: hp30, // GFZ Hp60 is published separately; approximate with Hp30
+      ap30: isFinite(ap30) ? ap30 : undefined,
+      ap60: isFinite(ap30) ? ap30 : undefined,
+      flag: cols[9] ?? undefined,
+    });
+  }
+
+  if (history.length === 0) {
     return await deriveFromKp();
   }
 
-  // Process the data
-  const history: HpDataPoint[] = rawData.map((point) => ({
-    time: point.datetime,
-    Hp30: point.Hp30,
-    Hp60: point.Hp60,
-    ap30: point.ap30,
-    ap60: point.ap60,
-    flag: point.flag,
-  }));
-
-  // Get the most recent values
-  const latest = rawData[rawData.length - 1];
+  const latest = history[history.length - 1];
 
   return {
     current: {
       hp30: latest.Hp30,
       hp60: latest.Hp60,
-      ap30: latest.ap30,
-      ap60: latest.ap60,
-      timestamp: latest.datetime,
+      ap30: latest.ap30 ?? 0,
+      ap60: latest.ap60 ?? 0,
+      timestamp: latest.time,
     },
     history: history.slice(-48), // Last 24 hours (48 half-hour intervals)
     metadata: {
@@ -147,18 +163,18 @@ async function deriveFromKp(): Promise<HpIndexResponse> {
 
     const kpData = await kpResponse.json();
 
-    // NOAA Kp data format: [time_tag, kp, kp_flag, observed, ...]
+    // NOAA planetary-k-index format: [{ time_tag, Kp, a_running, station_count }]
     const recentKp = kpData.slice(-8); // Last 8 entries (24 hours of 3-hour data)
 
     // Convert Kp to approximate Hp30 (using interpolation)
     const history: HpDataPoint[] = [];
     for (let i = 0; i < recentKp.length; i++) {
       const entry = recentKp[i];
-      if (Array.isArray(entry) && entry.length >= 2) {
-        const kp = parseFloat(entry[1]) || 0;
+      if (entry && entry.time_tag != null) {
+        const kp = parseFloat(entry.Kp) || 0;
         // Hp30 is roughly similar to Kp but with more variation
         history.push({
-          time: entry[0],
+          time: entry.time_tag,
           Hp30: kp,
           Hp60: kp,
           flag: "derived",
@@ -252,7 +268,7 @@ export async function GET() {
       if (kpResponse.ok) {
         const kpData = await kpResponse.json();
         const latestKp = kpData[kpData.length - 1];
-        const currentKp = parseFloat(latestKp?.[1]) || 0;
+        const currentKp = parseFloat(latestKp?.Kp) || 0;
 
         const hp30DiffersSignificantly =
           Math.abs(response.current.hp30 - currentKp) >= 2;

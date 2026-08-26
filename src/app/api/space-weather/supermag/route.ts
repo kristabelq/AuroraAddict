@@ -146,22 +146,23 @@ async function fetchMagnetometerData(): Promise<SuperMAGResponse> {
   // Fallback: Use NOAA GOES magnetometer for basic readings
   // and estimate ground-based perturbations
   try {
+    // NOAA retired products/solar-wind/mag-*.json; real-time IMF now lives at
+    // /json/rtsw/rtsw_mag_1m.json (array of named objects, multiple sources).
     const goesResponse = await fetch(
-      "https://services.swpc.noaa.gov/products/solar-wind/mag-2-hour.json"
+      "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json"
     );
 
     if (goesResponse.ok) {
       const goesData = await goesResponse.json();
 
-      // Use GOES data to estimate ground perturbations
-      // This is a simplified model - real SuperMAG data would be more accurate
-      const latestGoes = goesData[goesData.length - 1];
-      const bt = latestGoes ? Math.sqrt(
-        Math.pow(parseFloat(latestGoes[1]) || 0, 2) +
-        Math.pow(parseFloat(latestGoes[2]) || 0, 2) +
-        Math.pow(parseFloat(latestGoes[3]) || 0, 2)
-      ) : 0;
-      const bz = latestGoes ? parseFloat(latestGoes[3]) || 0 : 0;
+      // Use IMF data to estimate ground perturbations.
+      // This is a simplified model - real SuperMAG data would be more accurate.
+      const activeRows = Array.isArray(goesData)
+        ? goesData.filter((r: any) => r.active)
+        : [];
+      const latestGoes = activeRows[activeRows.length - 1];
+      const bt = latestGoes ? parseFloat(latestGoes.bt) || 0 : 0;
+      const bz = latestGoes ? parseFloat(latestGoes.bz_gsm) || 0 : 0;
 
       // Estimate ground perturbation based on IMF conditions
       // Delta B roughly correlates with southward Bz

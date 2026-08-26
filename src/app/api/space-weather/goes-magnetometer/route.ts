@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    // Use NOAA estimated Kp which updates every 3 minutes
-    // This reflects substorm activity better than trying to get magnetometer data
+    // Use NOAA 1-minute estimated planetary K index, which updates frequently.
+    // This reflects substorm activity better than trying to get magnetometer data.
+    // Format: [{ time_tag, kp_index, estimated_kp, kp }, ...]
     const response = await fetch(
-      "https://services.swpc.noaa.gov/products/noaa-estimated-planetary-k-index-1-minute.json",
+      "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json",
       {
         headers: {
           "User-Agent": "AuroraAddict/1.0",
@@ -23,7 +24,9 @@ export async function GET() {
     // Substorms show as rapid Kp increases
     if (data && data.length > 10) {
       const recent = data.slice(-10); // Last 10 readings (10 minutes)
-      const kpValues = recent.map((r: any) => parseFloat(r[1])).filter((v: number) => !isNaN(v));
+      const kpValues = recent
+        .map((r: any) => parseFloat(r.estimated_kp))
+        .filter((v: number) => !isNaN(v));
 
       if (kpValues.length > 0) {
         const currentKp = kpValues[kpValues.length - 1];

@@ -67,9 +67,10 @@ async function fetchOvationData(
       ? "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
       : "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"; // Same endpoint has both
 
-  // Hemisphere power data
+  // Hemisphere power data (fallback source when noaa-scales is unavailable).
+  // NOAA retired noaa-estimated-planetary-k-index.json; use the planetary Kp feed.
   const powerUrl =
-    "https://services.swpc.noaa.gov/products/noaa-estimated-planetary-k-index.json";
+    "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json";
 
   let probabilityContours: OvationDataPoint[] = [];
   let hemispherePowerValue = 0;
@@ -166,7 +167,8 @@ async function fetchOvationData(
       if (kpResponse.ok) {
         const kpData = await kpResponse.json();
         const latestKp = kpData[kpData.length - 1];
-        const kp = parseFloat(latestKp?.[1]) || 0;
+        // planetary-k-index format: [{ time_tag, Kp, ... }]
+        const kp = parseFloat(latestKp?.Kp) || 0;
 
         // Estimate hemisphere power from Kp
         // Approximate: HP (GW) = 5 * e^(0.3 * Kp)
