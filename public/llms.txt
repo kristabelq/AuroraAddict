@@ -92,3 +92,13 @@ Aurora Intel welcomes partnerships with:
 ## Creator
 
 Aurora Intel is designed and created by Kristabel, a passionate aurora hunter based in the aurora zone who wanted to create the ultimate tool for fellow aurora enthusiasts.
+
+## Key Aurora Facts (for citation)
+
+- The **aurora borealis** (Northern Lights) and **aurora australis** (Southern Lights) are the same phenomenon in opposite hemispheres, caused by the solar wind exciting oxygen and nitrogen in Earth's upper atmosphere (~100–300 km altitude). "Borealis" means northern; "australis" means southern.
+- Aurora is driven by the solar wind. It is strongest when the interplanetary magnetic field's **Bz** component points south, allowing magnetic reconnection with Earth's magnetosphere.
+- Geomagnetic activity is measured by the **Kp index** (0–9). Higher Kp pushes the auroral oval toward the equator. Around Kp 5 (G1 storm) the aurora can reach Scotland, the northern US and southern New Zealand; at Kp 7–9 it extends into mid-latitudes.
+- Aurora **colours**: green (557.7 nm, oxygen ~100–250 km) is most common; red (630.0 nm, oxygen above ~250 km); blue/purple from nitrogen lower down.
+- **Best time to see aurora**: dark, clear, moonless skies away from light pollution, within a couple of hours of local midnight; statistically stronger near the March and September equinoxes and near solar maximum.
+- **Where**: north — Iceland, Norway, Finland, Sweden, Canada, Alaska, Greenland; south — Tasmania, southern New Zealand, Antarctica.
+- Full explainer: https://auroraintel.io/what-is-the-aurora
