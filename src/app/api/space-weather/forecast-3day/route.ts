@@ -105,13 +105,24 @@ async function fetchThreeDayForecast(): Promise<ThreeDayForecastResponse> {
 
     if (response.ok) {
       const data = await response.json();
-      // NOAA format: [time_tag, kp_value, ...]
-      noaaForecast = data
-        .slice(1) // Skip header
-        .map((row: string[]) => ({
-          date: row[0],
-          kp: parseFloat(row[1]) || 0,
-        }));
+      // NOAA now returns an array of objects ({ time_tag, kp, observed }); the
+      // legacy layout was array-of-arrays ([header, [time_tag, kp, ...]]).
+      // Support both and drop any rows without a usable date.
+      if (Array.isArray(data)) {
+        const isLegacyArray = Array.isArray(data[0]);
+        const records = isLegacyArray ? data.slice(1) : data;
+        noaaForecast = records
+          .map((row: string[] | { time_tag?: string; kp?: number | string }) => {
+            if (Array.isArray(row)) {
+              return { date: row[0], kp: parseFloat(row[1]) || 0 };
+            }
+            return {
+              date: row.time_tag ?? "",
+              kp: parseFloat(String(row.kp ?? 0)) || 0,
+            };
+          })
+          .filter((f: { date: string }) => Boolean(f.date));
+      }
     }
   } catch (error) {
     console.warn("Failed to fetch NOAA forecast:", error);
@@ -127,7 +138,9 @@ async function fetchThreeDayForecast(): Promise<ThreeDayForecastResponse> {
     const endDate = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
     const cmeResponse = await fetch(
-      `https://api.nasa.gov/DONKI/CMEAnalysis?startDate=${startDate}&endDate=${endDate}&mostAccurateOnly=true&completeEntryOnly=true&api_key=DEMO_KEY`
+      `https://api.nasa.gov/DONKI/CMEAnalysis?startDate=${startDate}&endDate=${endDate}&mostAccurateOnly=true&completeEntryOnly=true&api_key=${
+        process.env.NASA_API_KEY || "DEMO_KEY"
+      }`
     );
 
     if (cmeResponse.ok) {
@@ -190,7 +203,9 @@ async function fetchThreeDayForecast(): Promise<ThreeDayForecastResponse> {
 
     // Check for High-Speed Streams from coronal holes
     const hssResponse = await fetch(
-      `https://api.nasa.gov/DONKI/HSS?startDate=${startDate}&endDate=${endDate}&api_key=DEMO_KEY`
+      `https://api.nasa.gov/DONKI/HSS?startDate=${startDate}&endDate=${endDate}&api_key=${
+        process.env.NASA_API_KEY || "DEMO_KEY"
+      }`
     );
 
     if (hssResponse.ok) {

@@ -209,30 +209,42 @@ export function useSpaceWeather(options: UseSpaceWeatherOptions = {}) {
    */
   const fetchSolarWind = useCallback(async (): Promise<SolarWindData | null> => {
     try {
-      const response = await fetch("/api/space-weather/solar-wind");
-      if (!response.ok) throw new Error("Failed to fetch solar wind");
+      // Plasma (speed / density / temperature) and the magnetic field (Bx/By/Bz/Bt)
+      // come from two different NOAA feeds. The /solar-wind route returns the
+      // magnetic field as legacy rows [time, bx, by, bz, lon, lat, bt]; the
+      // /plasma route returns [time, density, speed, temperature]. Fetch both and
+      // combine, mirroring the Intelligence page.
+      const [magResponse, plasmaResponse] = await Promise.all([
+        fetch("/api/space-weather/solar-wind"),
+        fetch("/api/space-weather/plasma"),
+      ]);
 
-      const data = await response.json();
+      if (!magResponse.ok) throw new Error("Failed to fetch solar wind magnetic field");
+      if (!plasmaResponse.ok) throw new Error("Failed to fetch solar wind plasma");
 
-      // Process NOAA solar wind data
-      if (Array.isArray(data) && data.length > 1) {
-        const latest = data[data.length - 1];
-        return {
-          speed: parseFloat(latest[2]) || 0,
-          density: parseFloat(latest[1]) || 0,
-          temperature: parseFloat(latest[3]) || 0,
-          bz: parseFloat(latest[6]) || 0,
-          by: parseFloat(latest[5]) || 0,
-          bt: Math.sqrt(
-            Math.pow(parseFloat(latest[4]) || 0, 2) +
-            Math.pow(parseFloat(latest[5]) || 0, 2) +
-            Math.pow(parseFloat(latest[6]) || 0, 2)
-          ),
-          timestamp: latest[0],
-        };
+      const magData = await magResponse.json();
+      const plasmaData = await plasmaResponse.json();
+
+      if (
+        !Array.isArray(magData) || magData.length < 2 ||
+        !Array.isArray(plasmaData) || plasmaData.length < 2
+      ) {
+        return null;
       }
 
-      return null;
+      // Index 0 is the header row; latest reading is the last element.
+      const latestMag = magData[magData.length - 1]; // [time, bx, by, bz, lon, lat, bt]
+      const latestPlasma = plasmaData[plasmaData.length - 1]; // [time, density, speed, temperature]
+
+      return {
+        density: parseFloat(latestPlasma[1]) || 0,
+        speed: parseFloat(latestPlasma[2]) || 0,
+        temperature: parseFloat(latestPlasma[3]) || 0,
+        by: parseFloat(latestMag[2]) || 0,
+        bz: parseFloat(latestMag[3]) || 0,
+        bt: parseFloat(latestMag[6]) || 0,
+        timestamp: latestPlasma[0] || latestMag[0],
+      };
     } catch (error) {
       console.error("Error fetching solar wind:", error);
       return null;

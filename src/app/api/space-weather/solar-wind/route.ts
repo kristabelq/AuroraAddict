@@ -49,7 +49,10 @@ export async function GET() {
       headers: {
         "User-Agent": "AuroraAddict/1.0",
       },
-      next: { revalidate: 60 }, // Cache for 1 minute
+      // The raw feed (~3MB, 24h of 1-min data) exceeds Next's 2MB fetch-cache
+      // limit, so caching it only logs an error. We trim to RECENT_ROWS below
+      // and skip the upstream data cache.
+      cache: "no-store",
     });
 
     if (!response.ok) {

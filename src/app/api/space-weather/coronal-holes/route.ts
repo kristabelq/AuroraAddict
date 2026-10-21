@@ -13,8 +13,11 @@ export async function GET(request: Request) {
       );
     }
 
-    // Use environment variable for NASA API key, with fallback to DEMO_KEY for development
-    const nasaApiKey = process.env.NASA_DONKI_API_KEY || "DEMO_KEY";
+    // Use environment variable for NASA API key, with fallback to DEMO_KEY for development.
+    // Standardized on NASA_API_KEY (the var that is actually configured); NASA_DONKI_API_KEY
+    // kept as a fallback for backward compatibility.
+    const nasaApiKey =
+      process.env.NASA_API_KEY || process.env.NASA_DONKI_API_KEY || "DEMO_KEY";
 
     const response = await fetch(
       `https://api.nasa.gov/DONKI/HSS?startDate=${startDate}&endDate=${endDate}&api_key=${nasaApiKey}`,
