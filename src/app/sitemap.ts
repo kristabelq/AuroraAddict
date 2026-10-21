@@ -1,4 +1,6 @@
 import type { MetadataRoute } from "next";
+import { getAuroraCountries } from "@/lib/auroraLocations";
+import { countrySlug } from "@/lib/locationSlug";
 
 const BASE = "https://auroraintel.io";
 
@@ -21,6 +23,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/intelligence", changeFrequency: "hourly", priority: 0.9 },
     { path: "/forecast", changeFrequency: "hourly", priority: 0.9 },
     { path: "/aurora-guide", changeFrequency: "weekly", priority: 0.9 },
+    { path: "/aurora-locations", changeFrequency: "weekly", priority: 0.8 },
     { path: "/about", changeFrequency: "monthly", priority: 0.8 },
     { path: "/coronal-holes", changeFrequency: "daily", priority: 0.8 },
     { path: "/solar-wind", changeFrequency: "hourly", priority: 0.8 },
@@ -37,10 +40,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/plan", changeFrequency: "weekly", priority: 0.5 },
   ];
 
-  return routes.map((r) => ({
+  const staticEntries = routes.map((r) => ({
     url: `${BASE}${r.path}`,
     lastModified: now,
     changeFrequency: r.changeFrequency,
     priority: r.priority,
   }));
+
+  // Per-country aurora location pages (generated from the location dataset).
+  const countryEntries = getAuroraCountries().map((country) => ({
+    url: `${BASE}/aurora-locations/${countrySlug(country)}`,
+    lastModified: now,
+    changeFrequency: "weekly" as const,
+    priority: 0.6,
+  }));
+
+  return [...staticEntries, ...countryEntries];
 }
