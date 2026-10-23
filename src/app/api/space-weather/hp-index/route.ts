@@ -70,15 +70,24 @@ async function fetchHpIndex(): Promise<HpIndexResponse> {
   // Not-yet-available half-hours are filled with Hp30 = -1.000.
   const nowcastUrl = "https://kp.gfz.de/app/files/Hp30_ap30_nowcast.txt";
 
-  const response = await fetch(nowcastUrl, {
-    headers: {
-      "User-Agent": "AuroraAddict/1.0 (aurora-forecasting)",
-    },
-    next: { revalidate: 900 }, // 15 minutes
-  });
+  let response: Response;
+  try {
+    response = await fetch(nowcastUrl, {
+      headers: {
+        "User-Agent": "AuroraAddict/1.0 (aurora-forecasting)",
+      },
+      next: { revalidate: 900 }, // 15 minutes
+    });
+  } catch (err) {
+    // GFZ is network-unreachable (timeout / DNS / connection reset). fetch()
+    // throws here, so fall back to the NOAA Kp-derived estimate instead of
+    // letting the error bubble up to a 500.
+    console.warn("GFZ nowcast fetch failed, using Kp-derived estimate", err);
+    return await deriveFromKp();
+  }
 
   if (!response.ok) {
-    // If GFZ is unavailable, try to derive from NOAA Kp
+    // If GFZ returns an HTTP error, try to derive from NOAA Kp
     console.warn("GFZ nowcast unavailable, using Kp-derived estimate");
     return await deriveFromKp();
   }
